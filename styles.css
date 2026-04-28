@@ -1,0 +1,267 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+:root {
+    --panel-bg: rgba(30, 40, 50, 0.65);
+    --input-bg: rgba(70, 80, 70, 0.8);
+    --btn-bg: rgba(60, 65, 60, 0.9);
+    --accent-color: #ffffff;
+    --panel-border: transparent;
+}
+
+body {
+    font-family: 'Arial', sans-serif;
+    color: #fff;
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    background-color: #041421; /* Fallback */
+}
+
+/* Crossfade Background Implementation */
+.bg-layer {
+    position: absolute;
+    top: 0; 
+    left: 0;
+    width: 100vw; 
+    height: 100vh;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0;
+    transition: opacity 1.2s ease-in-out;
+    z-index: -1;
+}
+
+.bg-layer.active {
+    opacity: 1;
+}
+
+.static-bg {
+    background-color: #041421;
+}
+
+.auth-panel {
+    width: 90%;
+    max-width: 480px;
+    padding: 50px 40px;
+    background-color: var(--panel-bg);
+    border: 2px solid var(--panel-border);
+    border-radius: 20px;
+    text-align: center;
+    transition: background-color 0.5s ease, border-color 0.5s ease;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.7); 
+}
+
+.register-panel {
+    background-color: #061826;
+    border: 1px solid #73a5d1;
+    border-radius: 8px;
+    padding: 40px 50px;
+}
+
+.register-panel h1 {
+    color: #74a8cd !important;
+    font-size: 28px;
+    letter-spacing: 3px;
+    margin-bottom: 25px;
+    text-transform: uppercase;
+}
+
+.register-panel input {
+    background-color: #092238;
+    border: 1px solid #28557b;
+    border-radius: 4px;
+    padding: 14px;
+}
+
+.register-panel .btn-register {
+    background-color: #74a8cd;
+    color: #000;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.brand-logos {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.logo-wrapper {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+    border: 2px solid transparent;
+    border-radius: 8px;
+}
+
+.logo-wrapper.active {
+    border-color: var(--accent-color);
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.brand-logos img {
+    object-fit: contain; 
+    transition: transform 0.3s ease;
+}
+
+.logo-cs2   { width: 37px; height: 37px; }
+.logo-dota2 { width: 48px; height: 48px; }
+.logo-rust  { width: 40px; height: 40px; }
+.logo-tf2   { width: 44px; height: 44px; }
+
+.logo-wrapper.active img {
+    transform: scale(1.1);
+}
+
+.logo-wrapper.active .logo-dota2 {
+    transform: scale(1.1) translateY(1px);
+}
+
+.site-brand-name {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    font-style: italic;
+    text-transform: uppercase;
+    text-align: center;
+    color: #ffffff !important;
+    letter-spacing: 1px;
+    transition: none;
+}
+
+.login-brand {
+    margin-top: 30px;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
+.register-brand {
+    margin: -5px 0 15px 0;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
+.auth-panel h1 {
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    margin-bottom: 30px;
+    text-transform: uppercase;
+    color: var(--accent-color); 
+    transition: color 0.5s ease;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 25px;
+}
+
+input {
+    width: 100%;
+    padding: 16px;
+    background-color: var(--input-bg);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    color: #fff;
+    font-size: 16px;
+    text-align: center;
+    transition: background-color 0.5s ease;
+}
+
+input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.btn-primary {
+    padding: 16px;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    background-color: var(--btn-bg);
+    transition: background-color 0.5s ease, filter 0.3s;
+}
+
+.btn-primary:hover {
+    filter: brightness(1.2);
+}
+
+.auth-sub-links {
+    display: flex;
+    justify-content: space-around;
+    font-size: 14px;
+    margin-top: 10px;
+}
+
+.auth-sub-links a {
+    text-decoration: none;
+    font-weight: bold;
+    color: var(--accent-color); 
+    transition: color 0.5s ease;
+    filter: brightness(0.9);
+}
+
+.alert-error {
+    background-color: rgba(255, 0, 0, 0.2);
+    color: #ffcccc;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    border: 1px solid rgba(255, 0, 0, 0.5);
+}
+
+@media (max-width: 600px) {
+    .auth-panel {
+        width: 95%;
+        padding: 35px 25px; 
+    }
+
+    .register-panel {
+        padding: 35px 25px;
+    }
+
+    .auth-panel h1 {
+        font-size: 26px;
+        letter-spacing: 2px;
+        margin-bottom: 20px;
+    }
+
+    .register-panel h1 {
+        font-size: 24px;
+    }
+
+    .site-brand-name {
+        font-size: 22px;
+    }
+
+    .brand-logos {
+        gap: 12px; 
+    }
+
+    .logo-wrapper {
+        width: 50px;
+        height: 50px;
+    }
+
+    input, .btn-primary {
+        padding: 14px;
+        font-size: 15px;
+    }
+}
