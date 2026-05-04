@@ -85,7 +85,7 @@ function count_user_listings($link, int $user_id): int {
 }
 
 function get_my_trade_inventory($link, int $user_id): array {
-    $sql = "SELECT ui.id AS user_item_id, i.id AS item_id, i.name, i.image, i.game 
+    $sql = "SELECT ui.id AS user_item_id, i.id AS item_id, i.name, i.image, i.game, i.wear_rating, i.rarity 
             FROM user_items ui 
             JOIN items i ON ui.item_id = i.id 
             WHERE ui.user_id = ?";
@@ -147,3 +147,4 @@ function market_game_info(string $game): array {
         default => ['name' => 'All Games',        'logo' => '']
     };
 }
+?>
