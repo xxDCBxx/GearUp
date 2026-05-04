@@ -15,7 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     if ($action === "make_offer" && !empty($_POST["receiver_id"])) {
         $stmt = mysqli_prepare($link, "INSERT INTO trade_offers (sender_id, receiver_id, sender_item_id, receiver_item_id) VALUES (?, ?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, "iiii", $user_id, $_POST["receiver_id"], $_POST["sender_item_id"], $_POST["receiver_item_id"]);
+        mysqli_stmt_bind_param($stmt, "iiss", $user_id, $_POST["receiver_id"], $_POST["sender_item_id"], $_POST["receiver_item_id"]);
         mysqli_stmt_execute($stmt);
         header("Location: offers.php?tab=sent");
         exit;
@@ -37,17 +37,46 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 function get_user_offers($link, $user_id, $type = 'received') {
     $col = ($type === 'received') ? "receiver_id" : "sender_id";
-    $sql = "SELECT to.id AS offer_id, to.status,
-                   si.name AS s_name, si.image AS s_image, si.wear_rating AS s_wear, si.rarity AS s_rarity, si.float_value AS s_float,
-                   ri.name AS r_name, ri.image AS r_image, ri.wear_rating AS r_wear, ri.rarity AS r_rarity, ri.float_value AS r_float
-            FROM trade_offers `to`
-            JOIN items si ON to.sender_item_id = si.id
-            JOIN items ri ON to.receiver_item_id = ri.id
-            WHERE to.$col = ? AND to.status = 'pending'
-            ORDER BY to.created_at DESC";
+    $sql = "SELECT id AS offer_id, status, sender_item_id, receiver_item_id
+            FROM trade_offers
+            WHERE $col = ? AND status = 'pending'
+            ORDER BY created_at DESC";
+            
     $stmt = mysqli_prepare($link, $sql);
     mysqli_stmt_bind_param($stmt, "i", $user_id);
     mysqli_stmt_execute($stmt);
-    return mysqli_fetch_all(mysqli_stmt_get_result($stmt), MYSQLI_ASSOC);
+    $raw_offers = mysqli_fetch_all(mysqli_stmt_get_result($stmt), MYSQLI_ASSOC);
+    
+    $offers = [];
+    foreach ($raw_offers as $off) {
+        $offers[] = [
+            'offer_id' => $off['offer_id'],
+            'status' => $off['status'],
+            'sender_items' => get_items_by_ids($link, $off['sender_item_id']),
+            'receiver_items' => get_items_by_ids($link, $off['receiver_item_id'])
+        ];
+    }
+    return $offers;
+}
+
+function get_items_by_ids($link, $ids_string) {
+    if (empty($ids_string)) return [];
+    
+    $ids = array_filter(array_map('intval', explode(',', $ids_string)));
+    if (empty($ids)) return [];
+    
+    $in_clause = implode(',', $ids);
+    $res = mysqli_query($link, "SELECT id, name, image, wear_rating, rarity, float_value, game FROM items WHERE id IN ($in_clause)");
+    return mysqli_fetch_all($res, MYSQLI_ASSOC);
+}
+
+function offers_game_info(string $game): array {
+    return match(strtolower($game)) {
+        'cs2'   => ['name' => 'Counter-Strike 2', 'logo' => 'logos/logo_cs2.png'],
+        'dota2' => ['name' => 'Dota 2',           'logo' => 'logos/logo_dota2.png'],
+        'rust'  => ['name' => 'Rust',             'logo' => 'logos/logo_rust.webp'],
+        'tf2'   => ['name' => 'Team Fortress 2',  'logo' => 'logos/logo_tf2.png'],
+        default => ['name' => 'Unknown',          'logo' => ''],
+    };
 }
 ?>
