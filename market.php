@@ -64,32 +64,41 @@ $my_inventory = get_my_trade_inventory($link, $_SESSION["id"]);
         .page-btn:hover:not(.disabled) { background: var(--accent); border-color: var(--accent); }
         .page-btn.disabled { opacity: 0.3; pointer-events: none; cursor: not-allowed; }
         .market-footer { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 32px; color: var(--text-dim); font-size: 14px; }
-
-        /* Restored ORIGINAL Grid-Style Make Offer Modal */
-        .trade-item-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 15px; max-height: 350px; overflow-y: auto; padding-right: 8px; }
-        .trade-item-option { background: var(--bg-card-2); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; transition: 0.2s; text-align: center; }
-        .trade-item-option:hover { border-color: var(--accent); background: rgba(74, 159, 212, 0.05); }
-        .trade-item-option.selected { border-color: var(--accent); background: rgba(74, 159, 212, 0.15); box-shadow: 0 0 15px rgba(74, 159, 212, 0.2); }
-        .trade-item-option img { width: 100%; height: 60px; object-fit: contain; }
-        .trade-item-option span { font-size: 12px; font-weight: 700; color: #fff; line-height: 1.2; height: 2.4em; overflow: hidden; }
-
         .buy-confirm-text { font-size: 14px; color: var(--text-dim); margin: 20px 0; line-height: 1.6; }
         .buy-price-tag { font-family: var(--font-display); font-size: 24px; color: var(--accent); font-weight: 700; display: block; margin-top: 10px; }
-        .btn-offer { 
-            background: transparent; 
-            color: var(--accent); 
-            border: 1px solid var(--accent); 
-            border-radius: var(--radius); 
-            padding: 8px 16px; 
-            font-size: 13px;
-            font-weight: 700; 
-            cursor: pointer; 
-            transition: 0.2s; 
-        }
-
-        .btn-offer:hover { 
-            background: rgba(74, 159, 212, 0.1); 
-            color: #fff;
+        .btn-offer { background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius); padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .btn-offer:hover { background: rgba(74, 159, 212, 0.1); color: #fff; }
+        
+        .steam-modal-body { padding: 0; }
+        .steam-side-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+        .steam-side-desc { font-size: 12px; color: var(--text-dim); margin-bottom: 12px; }
+        .steam-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; background: var(--bg-dark); padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 24px; min-height: 104px; box-sizing: border-box; width: 100%; }
+        .steam-box { width: 100%; min-width: 0; aspect-ratio: 1; background: var(--bg-card-2); border: 1px dashed var(--border-light); border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px; position: relative; gap: 4px; text-align: center; box-sizing: border-box; overflow: hidden; }
+        .steam-box.filled { border-style: solid; border-color: var(--border-light); background: var(--bg-card); cursor: pointer; transition: 0.2s; }
+        .steam-box.filled:hover { border-color: var(--accent); }
+        .steam-box img { max-width: 100%; height: 45px; object-fit: contain; margin-bottom: 2px; }
+        .steam-box-name { font-family: var(--font-display); font-size: 11px; font-weight: 700; color: #fff; line-height: 1.1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-wrap: break-word; word-break: break-all; width: 100%; }
+        .steam-box-meta { font-size: 9px; color: var(--text-dim); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+        
+        .steam-confirm-wrap { display: flex; align-items: center; gap: 10px; background: rgba(74, 159, 212, 0.05); padding: 12px 16px; border: 1px solid var(--accent); border-radius: var(--radius); }
+        .steam-confirm-wrap input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+        .steam-confirm-wrap label { font-size: 13px; color: #fff; cursor: pointer; user-select: none; font-weight: 600; margin: 0; }
+        
+        .inventory-selector { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px; margin-bottom: 20px; }
+        .inventory-title { font-size: 14px; color: var(--text-dim); margin-bottom: 10px; font-weight: 600; }
+        .trade-item-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-height: 200px; overflow-y: auto; padding-right: 4px; box-sizing: border-box; width: 100%; }
+        .trade-item-option { background: var(--bg-card-2); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: 0.2s; text-align: center; box-sizing: border-box; min-width: 0; overflow: hidden; }
+        .trade-item-option:hover { border-color: var(--accent); }
+        .trade-item-option.selected { border-color: var(--accent); opacity: 0.3; pointer-events: none; }
+        .trade-item-option img { max-width: 100%; height: 40px; object-fit: contain; }
+        
+        .btn:disabled, .btn-accent:disabled {
+            background: var(--bg-card-2) !important;
+            color: var(--text-muted) !important;
+            cursor: not-allowed !important;
+            opacity: 0.5 !important;
+            pointer-events: none;
+            box-shadow: none !important;
         }
     </style>
 </head>
@@ -153,7 +162,7 @@ $my_inventory = get_my_trade_inventory($link, $_SESSION["id"]);
                                 <td class="price-val">$<?= number_format($row['price'], 2) ?></td>
                                 <td><div class="action-group">
                                     <?php if($row['owner_id'] != $_SESSION['id']): ?>
-                                        <button class="btn btn-sm btn-offer" onclick="openOfferModal('<?= $row['owner_id'] ?>', '<?= $row['item_id'] ?>', '<?= addslashes($row['name']) ?>')">Make Offer</button>
+                                        <button class="btn btn-sm btn-offer" onclick="openOfferModal('<?= $row['owner_id'] ?>', '<?= $row['item_id'] ?>', '<?= addslashes($row['name']) ?>', '<?= htmlspecialchars($row['image']) ?>', '<?= htmlspecialchars($row['wear_rating'] ?? 'N/A') ?>', '<?= htmlspecialchars($row['rarity'] ?? 'N/A') ?>', '<?= $gi['logo'] ?>')">Make Offer</button>
                                         <button type="button" class="btn btn-sm btn-accent" onclick="openBuyModal('<?= $row['listing_id'] ?>', '<?= addslashes($row['name']) ?>', '<?= number_format($row['price'], 2) ?>')">Buy Now</button>
                                     <?php else: ?>
                                         <span style="font-size:11px; color:var(--accent); font-weight:800; letter-spacing:1px;">YOUR LISTING</span>
@@ -183,25 +192,51 @@ $my_inventory = get_my_trade_inventory($link, $_SESSION["id"]);
 </div>
 
 <div class="modal-overlay" id="offerModal">
-    <div class="modal" style="max-width: 500px;">
+    <div class="modal" style="max-width: 600px;">
         <div class="modal-title">Make a Trade Offer</div>
-        <p style="font-size:13px; color:var(--text-dim); margin-bottom:15px;">Trading for: <strong id="targetItemName" style="color:#fff;"></strong></p>
-        <form action="offers_func.php" method="POST">
+        <form action="offers_func.php" method="POST" id="offerForm">
             <input type="hidden" name="action" value="make_offer">
             <input type="hidden" name="receiver_id" id="modalReceiverId">
             <input type="hidden" name="receiver_item_id" id="modalReceiverItemId">
             <input type="hidden" name="sender_item_id" id="modalSenderItemId">
-            <div class="trade-item-list">
-                <?php foreach($my_inventory as $inv): ?>
-                <div class="trade-item-option" onclick="selectTradeItem(this, '<?= $inv['item_id'] ?>')">
-                    <img src="<?= $inv['image'] ?>" alt="">
-                    <span><?= htmlspecialchars($inv['name']) ?></span>
+            
+            <div class="steam-modal-body">
+                <div class="steam-side-title">Your items:</div>
+                <div class="steam-side-desc">These are the items you will lose in the trade.</div>
+                <div class="steam-grid" id="senderGrid">
                 </div>
-                <?php endforeach; ?>
+
+                <div class="steam-side-title">Their items:</div>
+                <div class="steam-side-desc">These are the items you will receive in the trade.</div>
+                <div class="steam-grid" id="receiverGrid">
+                </div>
+
+                <div class="inventory-selector">
+                    <div class="inventory-title">Select items from your inventory:</div>
+                    <div class="trade-item-list">
+                        <?php foreach($my_inventory as $inv): $inv_gi = market_game_info($inv['game'] ?? ''); ?>
+                        <div class="trade-item-option" id="inv-opt-<?= $inv['item_id'] ?>" onclick="addTradeItem('<?= $inv['item_id'] ?>', '<?= htmlspecialchars($inv['image']) ?>', '<?= htmlspecialchars(addslashes($inv['name'])) ?>', '<?= htmlspecialchars($inv['wear_rating'] ?? 'N/A') ?>', '<?= htmlspecialchars($inv['rarity'] ?? 'N/A') ?>', '<?= $inv_gi['logo'] ?>')">
+                            <img src="<?= $inv['image'] ?>" alt="">
+                            <div class="steam-box-name">
+                                <?php if($inv_gi['logo']): ?><img src="<?= $inv_gi['logo'] ?>" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;display:inline-block;margin-bottom:0;"><?php endif; ?>
+                                <?= htmlspecialchars($inv['name']) ?>
+                            </div>
+                            <div class="steam-box-meta">Wear: <?= htmlspecialchars($inv['wear_rating'] ?? 'N/A') ?></div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-ghost" onclick="closeOfferModal()">Cancel</button>
-                <button type="submit" class="btn btn-accent" id="sendOfferBtn" disabled>Send Offer</button>
+
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; width: 100%; border-top: 1px solid var(--border); padding-top: 20px;">
+                <div class="steam-confirm-wrap" style="padding: 8px 12px; margin: 0;">
+                    <input type="checkbox" id="confirmTradeCheck" onchange="checkFormReady()">
+                    <label for="confirmTradeCheck">Click here to confirm trade contents.</label>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn btn-ghost" onclick="closeOfferModal()">Cancel</button>
+                    <button type="submit" class="btn btn-accent" id="sendOfferBtn" disabled>Make Offer</button>
+                </div>
             </div>
         </form>
     </div>
@@ -221,19 +256,91 @@ $my_inventory = get_my_trade_inventory($link, $_SESSION["id"]);
 
 <script>
 let currentListingId = null;
-function openOfferModal(ownerId, itemId, itemName) {
+let selectedItems = [];
+
+function openOfferModal(ownerId, itemId, itemName, itemImg, itemWear, itemRarity, gameLogo) {
     document.getElementById('modalReceiverId').value = ownerId;
     document.getElementById('modalReceiverItemId').value = itemId;
-    document.getElementById('targetItemName').textContent = itemName;
+    
+    const logoHtml = gameLogo ? `<img src="${gameLogo}" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;display:inline-block;margin-bottom:0;">` : '';
+    
+    const recGrid = document.getElementById('receiverGrid');
+    recGrid.innerHTML = `
+        <div class="steam-box filled">
+            <img src="${itemImg}" alt="">
+            <div class="steam-box-name">${logoHtml}${itemName}</div>
+            <div class="steam-box-meta">Wear: ${itemWear}</div>
+            <div class="steam-box-meta">Rarity: ${itemRarity}</div>
+        </div>
+        <div class="steam-box empty"></div>
+        <div class="steam-box empty"></div>
+        <div class="steam-box empty"></div>
+    `;
+
+    selectedItems = [];
+    document.querySelectorAll('.trade-item-option').forEach(el => el.classList.remove('selected'));
+    document.getElementById('confirmTradeCheck').checked = false;
+    
+    renderSenderGrid();
     document.getElementById('offerModal').classList.add('open');
 }
-function closeOfferModal() { document.getElementById('offerModal').classList.remove('open'); }
-function selectTradeItem(element, itemId) {
-    document.querySelectorAll('.trade-item-option').forEach(el => el.classList.remove('selected'));
-    element.classList.add('selected');
-    document.getElementById('modalSenderItemId').value = itemId;
-    document.getElementById('sendOfferBtn').disabled = false;
+
+function closeOfferModal() {
+    document.getElementById('offerModal').classList.remove('open');
 }
+
+function addTradeItem(id, img, name, wear, rarity, gameLogo) {
+    if (selectedItems.length >= 8) {
+        alert("You can only select up to 8 items for a single trade.");
+        return;
+    }
+    selectedItems.push({id, img, name, wear, rarity, gameLogo});
+    document.getElementById('inv-opt-' + id).classList.add('selected');
+    renderSenderGrid();
+}
+
+function removeTradeItem(index, id) {
+    selectedItems.splice(index, 1);
+    document.getElementById('inv-opt-' + id).classList.remove('selected');
+    document.getElementById('confirmTradeCheck').checked = false;
+    renderSenderGrid();
+}
+
+function renderSenderGrid() {
+    const grid = document.getElementById('senderGrid');
+    grid.innerHTML = '';
+    
+    const totalBoxes = selectedItems.length > 4 ? 8 : 4;
+    
+    for (let i = 0; i < totalBoxes; i++) {
+        const box = document.createElement('div');
+        box.className = 'steam-box';
+        if (selectedItems[i]) {
+            box.classList.add('filled');
+            const logoHtml = selectedItems[i].gameLogo ? `<img src="${selectedItems[i].gameLogo}" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;display:inline-block;margin-bottom:0;">` : '';
+            box.innerHTML = `
+                <img src="${selectedItems[i].img}" alt="">
+                <div class="steam-box-name">${logoHtml}${selectedItems[i].name}</div>
+                <div class="steam-box-meta">Wear: ${selectedItems[i].wear}</div>
+                <div class="steam-box-meta">Rarity: ${selectedItems[i].rarity}</div>
+            `;
+            box.onclick = () => removeTradeItem(i, selectedItems[i].id);
+        } else {
+            box.classList.add('empty');
+        }
+        grid.appendChild(box);
+    }
+    
+    document.getElementById('modalSenderItemId').value = selectedItems.map(item => item.id).join(',');
+    checkFormReady();
+}
+
+function checkFormReady() {
+    const isChecked = document.getElementById('confirmTradeCheck').checked;
+    const hasItems = selectedItems.length > 0;
+    document.getElementById('sendOfferBtn').disabled = !(isChecked && hasItems);
+}
+
 function openBuyModal(listingId, itemName, itemPrice) {
     currentListingId = listingId;
     document.getElementById('buyItemName').textContent = itemName;
@@ -241,7 +348,11 @@ function openBuyModal(listingId, itemName, itemPrice) {
     document.getElementById('buyError').style.display = 'none';
     document.getElementById('buyModal').classList.add('open');
 }
-function closeBuyModal() { document.getElementById('buyModal').classList.remove('open'); }
+
+function closeBuyModal() { 
+    document.getElementById('buyModal').classList.remove('open'); 
+}
+
 async function processPurchase() {
     const btn = document.getElementById('confirmBuyBtn');
     const errorDiv = document.getElementById('buyError');
