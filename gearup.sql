@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Apr 28, 2026 at 09:53 PM
+-- Generation Time: May 04, 2026 at 03:50 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -111,8 +111,8 @@ CREATE TABLE `trade_offers` (
   `id` int(11) NOT NULL,
   `sender_id` int(11) NOT NULL,
   `receiver_id` int(11) NOT NULL,
-  `sender_item_id` int(11) NOT NULL,
-  `receiver_item_id` int(11) NOT NULL,
+  `sender_item_id` varchar(255) NOT NULL,
+  `receiver_item_id` varchar(255) NOT NULL,
   `status` enum('pending','accepted','declined','cancelled') DEFAULT 'pending',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -122,9 +122,11 @@ CREATE TABLE `trade_offers` (
 --
 
 INSERT INTO `trade_offers` (`id`, `sender_id`, `receiver_id`, `sender_item_id`, `receiver_item_id`, `status`, `created_at`) VALUES
-(1, 1, 1, 1, 2, 'declined', '2026-04-28 17:42:53'),
-(2, 2, 1, 3, 4, 'cancelled', '2026-04-28 19:08:23'),
-(3, 2, 1, 3, 4, 'pending', '2026-04-28 19:15:45');
+(1, 1, 1, '1', '2', 'declined', '2026-04-28 17:42:53'),
+(2, 2, 1, '3', '4', 'cancelled', '2026-04-28 19:08:23'),
+(3, 2, 1, '3', '4', 'pending', '2026-04-28 19:15:45'),
+(4, 2, 1, '9,10,3', '4', 'cancelled', '2026-05-04 12:07:08'),
+(5, 2, 1, '9,10,3', '4', 'pending', '2026-05-04 13:36:25');
 
 -- --------------------------------------------------------
 
@@ -174,12 +176,12 @@ INSERT INTO `user_items` (`id`, `user_id`, `item_id`) VALUES
 (46, 1, 12),
 (47, 1, 13),
 (48, 1, 16),
-(49, 1, 17),
 (50, 1, 18),
 (53, 1, 20),
 (54, 2, 9),
 (56, 2, 10),
-(58, 2, 3);
+(58, 2, 3),
+(59, 1, 17);
 
 --
 -- Indexes for dumped tables
@@ -247,13 +249,13 @@ ALTER TABLE `items`
 -- AUTO_INCREMENT for table `market_listings`
 --
 ALTER TABLE `market_listings`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=55;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=56;
 
 --
 -- AUTO_INCREMENT for table `trade_offers`
 --
 ALTER TABLE `trade_offers`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `users`
@@ -265,7 +267,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `user_items`
 --
 ALTER TABLE `user_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=59;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=60;
 
 --
 -- Constraints for dumped tables
