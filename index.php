@@ -10,6 +10,11 @@ if(isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] === true){
 $username = $password = "";
 $username_err = $password_err = $login_err = "";
 $selected_theme = 0;
+$success_msg = "";
+
+if(isset($_GET['reset']) && $_GET['reset'] === 'success'){
+    $success_msg = "Your password has been reset successfully. You can now login with your new password.";
+}
 
 if (isset($_SESSION['flash_login_err'])) {
     $login_err = $_SESSION['flash_login_err'];
@@ -93,18 +98,30 @@ if($_SERVER["REQUEST_METHOD"] == "POST"){
 
         <h1>LOGIN</h1>
 
+        <?php if(!empty($success_msg)): ?>
+            <div style="background-color: rgba(0, 255, 0, 0.2); color: #ccffcc; padding: 10px; border-radius: 5px; margin-bottom: 15px; border: 1px solid rgba(0, 255, 0, 0.5);">
+                <?php echo htmlspecialchars($success_msg); ?>
+            </div>
+        <?php endif; ?>
+
         <?php if(!empty($login_err)): ?>
             <div class="alert-error"><?php echo $login_err; ?></div>
         <?php endif; ?>
 
         <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
             <input type="text" name="username" placeholder="Username" value="<?php echo htmlspecialchars($username); ?>" required>
-            <input type="password" name="password" placeholder="Password" required>
+            <div class="password-field-wrapper">
+                <input type="password" name="password" placeholder="Password" id="login_password" required>
+                <button type="button" class="toggle-password" onclick="togglePasswordVisibility('login_password')">
+                    <span class="toggle-icon">👁️</span>
+                </button>
+            </div>
             <input type="hidden" name="selected_theme" id="selected_theme_input" value="<?php echo htmlspecialchars($selected_theme); ?>">
             <button type="submit" class="btn-primary">Sign In</button>
         </form>
 
-        <div class="auth-sub-links" style="justify-content: center;">
+        <div class="auth-sub-links" style="display: flex; justify-content: space-between; margin-top: 15px;">
+            <a href="index_func.php?action=restart">Forgot Password?</a>
             <a href="register.php">Create Account</a>
         </div>
 
@@ -112,6 +129,15 @@ if($_SERVER["REQUEST_METHOD"] == "POST"){
     </div>
 
     <script>
+        function togglePasswordVisibility(fieldId) {
+            const field = document.getElementById(fieldId);
+            if (field.type === 'password') {
+                field.type = 'text';
+            } else {
+                field.type = 'password';
+            }
+        }
+
         const themes = [
             {
                 bg: 'backgrounds/bg_cs2.webp',
