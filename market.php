@@ -1,11 +1,73 @@
 <?php
 require_once "market_func.php";
 
-if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'buy_item') {
-    header('Content-Type: application/json');
-    $result = process_market_purchase($link, $_SESSION["id"], (int)$_POST['listing_id']);
-    echo json_encode($result);
-    exit;
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['ajax_action'])) {
+    if ($_POST['ajax_action'] === 'buy_item') {
+        header('Content-Type: application/json');
+        $result = process_market_purchase($link, $_SESSION["id"], (int)$_POST['listing_id']);
+        echo json_encode($result);
+        exit;
+    }
+    
+    if ($_POST['ajax_action'] === 'get_user_items') {
+        header('Content-Type: application/json');
+        $target_id = (int)$_POST['target_id'];
+        
+        $sql = "SELECT ui.id AS user_item_id, i.id AS item_id, i.name, i.image, i.game, i.wear_rating, i.rarity, 'inventory' as source 
+                FROM user_items ui 
+                JOIN items i ON ui.item_id = i.id 
+                WHERE ui.user_id = ?";
+        $stmt = mysqli_prepare($link, $sql);
+        mysqli_stmt_bind_param($stmt, "i", $target_id);
+        mysqli_stmt_execute($stmt);
+        $res = mysqli_stmt_get_result($stmt);
+        $inventory = mysqli_fetch_all($res, MYSQLI_ASSOC);
+        mysqli_stmt_close($stmt);
+
+        $sql2 = "SELECT ml.id AS listing_id, i.id AS item_id, i.name, i.image, i.game, i.wear_rating, i.rarity, 'market' as source 
+                FROM market_listings ml 
+                JOIN items i ON ml.item_id = i.id 
+                WHERE ml.user_id = ?";
+        $stmt2 = mysqli_prepare($link, $sql2);
+        mysqli_stmt_bind_param($stmt2, "i", $target_id);
+        mysqli_stmt_execute($stmt2);
+        $res2 = mysqli_stmt_get_result($stmt2);
+        $market_items = mysqli_fetch_all($res2, MYSQLI_ASSOC);
+        mysqli_stmt_close($stmt2);
+
+        // Filter out pending items for target user (similar to get_my_trade_inventory)
+        $pending_items = [];
+        $check_sql = "SELECT sender_item_id, receiver_item_id FROM trade_offers WHERE (sender_id = ? OR receiver_id = ?) AND status = 'pending'";
+        $check_stmt = mysqli_prepare($link, $check_sql);
+        mysqli_stmt_bind_param($check_stmt, "ii", $target_id, $target_id);
+        mysqli_stmt_execute($check_stmt);
+        $check_res = mysqli_stmt_get_result($check_stmt);
+        while ($row = mysqli_fetch_assoc($check_res)) {
+            if (!empty($row['sender_item_id'])) {
+                $ids = array_filter(array_map('intval', explode(',', $row['sender_item_id'])));
+                $pending_items = array_merge($pending_items, $ids);
+            }
+            if (!empty($row['receiver_item_id'])) {
+                $ids = array_filter(array_map('intval', explode(',', $row['receiver_item_id'])));
+                $pending_items = array_merge($pending_items, $ids);
+            }
+        }
+        mysqli_stmt_close($check_stmt);
+        $pending_items = array_unique($pending_items);
+
+        $all_items = array_merge($inventory, $market_items);
+        $filtered = [];
+        foreach ($all_items as $item) {
+            if (!in_array((int)$item['item_id'], $pending_items)) {
+                $gi = market_game_info($item['game']);
+                $item['game_logo'] = $gi['logo'];
+                $filtered[] = $item;
+            }
+        }
+
+        echo json_encode(['success' => true, 'items' => $filtered]);
+        exit;
+    }
 }
 
 $active_page = 'market';
@@ -165,7 +227,14 @@ $my_inventory = get_my_trade_inventory($link, $_SESSION["id"]);
                                         <button class="btn btn-sm btn-offer" onclick="openOfferModal('<?= $row['owner_id'] ?>', '<?= $row['item_id'] ?>', '<?= addslashes($row['name']) ?>', '<?= htmlspecialchars($row['image']) ?>', '<?= htmlspecialchars($row['wear_rating'] ?? 'N/A') ?>', '<?= htmlspecialchars($row['rarity'] ?? 'N/A') ?>', '<?= $gi['logo'] ?>')">Make Offer</button>
                                         <button type="button" class="btn btn-sm btn-accent" onclick="openBuyModal('<?= $row['listing_id'] ?>', '<?= addslashes($row['name']) ?>', '<?= number_format($row['price'], 2) ?>')">Buy Now</button>
                                     <?php else: ?>
-                                        <span style="font-size:11px; color:var(--accent); font-weight:800; letter-spacing:1px;">YOUR LISTING</span>
+                                        <div style="display:flex; align-items:center; gap:10px;">
+                                            <span style="font-size:11px; color:var(--accent); font-weight:800; letter-spacing:1px;">YOUR LISTING</span>
+                                            <form method="POST" action="profile.php" style="margin:0;">
+                                                <input type="hidden" name="action" value="cancel_listing">
+                                                <input type="hidden" name="listing_id" value="<?= $row['listing_id'] ?>">
+                                                <button type="submit" class="btn btn-sm btn-ghost" style="color: #f73636; border-color: rgba(247, 54, 54, 0.3);" onclick="return confirm('Cancel this listing? It will be returned to your inventory.');">Cancel</button>
+                                            </form>
+                                        </div>
                                     <?php endif; ?>
                                 </div></td>
                             </tr>
@@ -206,8 +275,13 @@ $my_inventory = get_my_trade_inventory($link, $_SESSION["id"]);
                 <div class="steam-grid" id="senderGrid">
                 </div>
 
-                <div class="steam-side-title">Their items:</div>
-                <div class="steam-side-desc">These are the items you will receive in the trade.</div>
+                <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                    <div>
+                        <div class="steam-side-title">Their items:</div>
+                        <div class="steam-side-desc">These are the items you will receive in the trade.</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-ghost" style="border: 1px solid var(--border); padding: 4px 8px; font-size: 11px;" onclick="openReceiverInventoryModal()">Browse Inventory</button>
+                </div>
                 <div class="steam-grid" id="receiverGrid">
                 </div>
 
@@ -215,7 +289,7 @@ $my_inventory = get_my_trade_inventory($link, $_SESSION["id"]);
                     <div class="inventory-title">Select items from your inventory:</div>
                     <div class="trade-item-list">
                         <?php foreach($my_inventory as $inv): $inv_gi = market_game_info($inv['game'] ?? ''); ?>
-                        <div class="trade-item-option" id="inv-opt-<?= $inv['item_id'] ?>" onclick="addTradeItem('<?= $inv['item_id'] ?>', '<?= htmlspecialchars($inv['image']) ?>', '<?= htmlspecialchars(addslashes($inv['name'])) ?>', '<?= htmlspecialchars($inv['wear_rating'] ?? 'N/A') ?>', '<?= htmlspecialchars($inv['rarity'] ?? 'N/A') ?>', '<?= $inv_gi['logo'] ?>')">
+                        <div class="trade-item-option sender-inv-opt" id="inv-opt-sender-<?= $inv['item_id'] ?>" onclick="addSenderItem('<?= $inv['item_id'] ?>', '<?= htmlspecialchars($inv['image']) ?>', '<?= htmlspecialchars(addslashes($inv['name'])) ?>', '<?= htmlspecialchars($inv['wear_rating'] ?? 'N/A') ?>', '<?= htmlspecialchars($inv['rarity'] ?? 'N/A') ?>', '<?= $inv_gi['logo'] ?>')">
                             <img src="<?= $inv['image'] ?>" alt="">
                             <div class="steam-box-name">
                                 <?php if($inv_gi['logo']): ?><img src="<?= $inv_gi['logo'] ?>" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;display:inline-block;margin-bottom:0;"><?php endif; ?>
@@ -242,6 +316,19 @@ $my_inventory = get_my_trade_inventory($link, $_SESSION["id"]);
     </div>
 </div>
 
+<div class="modal-overlay" id="receiverInventoryModal" style="z-index: 1000;">
+    <div class="modal" style="max-width: 500px;">
+        <div class="modal-title">Their Inventory</div>
+        <div class="inventory-selector" style="margin-top:0; border-top:none; padding-top:0;">
+            <div class="trade-item-list" id="receiverInventoryList" style="max-height: 400px;">
+            </div>
+        </div>
+        <div class="modal-footer" style="border-top: 1px solid var(--border); padding-top: 20px; margin-top: 20px;">
+            <button type="button" class="btn btn-accent" onclick="closeReceiverInventoryModal()">Done</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="buyModal">
     <div class="modal">
         <div class="modal-title">Confirm Purchase</div>
@@ -256,88 +343,163 @@ $my_inventory = get_my_trade_inventory($link, $_SESSION["id"]);
 
 <script>
 let currentListingId = null;
-let selectedItems = [];
+let selectedSenderItems = [];
+let selectedReceiverItems = [];
+let baseReceiverItem = null;
 
-function openOfferModal(ownerId, itemId, itemName, itemImg, itemWear, itemRarity, gameLogo) {
+async function openOfferModal(ownerId, itemId, itemName, itemImg, itemWear, itemRarity, gameLogo) {
     document.getElementById('modalReceiverId').value = ownerId;
-    document.getElementById('modalReceiverItemId').value = itemId;
     
-    const logoHtml = gameLogo ? `<img src="${gameLogo}" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;display:inline-block;margin-bottom:0;">` : '';
+    baseReceiverItem = { id: itemId, img: itemImg, name: itemName, wear: itemWear, rarity: itemRarity, gameLogo: gameLogo };
+    selectedReceiverItems = [];
+    selectedSenderItems = [];
     
-    const recGrid = document.getElementById('receiverGrid');
-    recGrid.innerHTML = `
-        <div class="steam-box filled">
-            <img src="${itemImg}" alt="">
-            <div class="steam-box-name">${logoHtml}${itemName}</div>
-            <div class="steam-box-meta">Wear: ${itemWear}</div>
-            <div class="steam-box-meta">Rarity: ${itemRarity}</div>
-        </div>
-        <div class="steam-box empty"></div>
-        <div class="steam-box empty"></div>
-        <div class="steam-box empty"></div>
-    `;
-
-    selectedItems = [];
-    document.querySelectorAll('.trade-item-option').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('.sender-inv-opt').forEach(el => el.classList.remove('selected'));
     document.getElementById('confirmTradeCheck').checked = false;
     
     renderSenderGrid();
+    renderReceiverGrid();
+    
     document.getElementById('offerModal').classList.add('open');
+
+    // Fetch receiver inventory
+    const recList = document.getElementById('receiverInventoryList');
+    recList.innerHTML = '<div style="color:var(--text-dim); padding:10px;">Loading their items...</div>';
+
+    const formData = new FormData();
+    formData.append('ajax_action', 'get_user_items');
+    formData.append('target_id', ownerId);
+
+    try {
+        const response = await fetch(window.location.href, { method: 'POST', body: formData });
+        const result = await response.json();
+        
+        recList.innerHTML = '';
+        if (result.success && result.items.length > 0) {
+            let hasExtraItems = false;
+            result.items.forEach(item => {
+                if (item.item_id == itemId) return; // skip the base item
+                hasExtraItems = true;
+                const safeName = item.name.replace(/'/g, "\\'");
+                const logoHtml = item.game_logo ? `<img src="${item.game_logo}" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;display:inline-block;margin-bottom:0;">` : '';
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'trade-item-option receiver-inv-opt';
+                itemDiv.id = 'inv-opt-receiver-' + item.item_id;
+                itemDiv.onclick = () => addReceiverItem(item.item_id, item.image, item.name, item.wear_rating || 'N/A', item.rarity || 'N/A', item.game_logo);
+                itemDiv.innerHTML = `
+                    <img src="${item.image}" alt="">
+                    <div class="steam-box-name">${logoHtml}${item.name}</div>
+                    <div class="steam-box-meta">Wear: ${item.wear_rating || 'N/A'}</div>
+                `;
+                recList.appendChild(itemDiv);
+            });
+            if (!hasExtraItems) {
+                recList.innerHTML = '<div style="color:var(--text-dim); padding:10px; grid-column:1/-1;">No other available items.</div>';
+            }
+        } else {
+            recList.innerHTML = '<div style="color:var(--text-dim); padding:10px; grid-column:1/-1;">No other available items.</div>';
+        }
+    } catch(e) {
+        recList.innerHTML = '<div style="color:var(--danger); padding:10px;">Failed to load items.</div>';
+    }
+}
+
+function openReceiverInventoryModal() {
+    document.getElementById('receiverInventoryModal').classList.add('open');
+}
+
+function closeReceiverInventoryModal() {
+    document.getElementById('receiverInventoryModal').classList.remove('open');
 }
 
 function closeOfferModal() {
     document.getElementById('offerModal').classList.remove('open');
 }
 
-function addTradeItem(id, img, name, wear, rarity, gameLogo) {
-    if (selectedItems.length >= 8) {
-        alert("You can only select up to 8 items for a single trade.");
+function addSenderItem(id, img, name, wear, rarity, gameLogo) {
+    if (selectedSenderItems.length >= 4) {
+        alert("You can only select up to 4 items for a single trade.");
         return;
     }
-    selectedItems.push({id, img, name, wear, rarity, gameLogo});
-    document.getElementById('inv-opt-' + id).classList.add('selected');
-    renderSenderGrid();
-}
-
-function removeTradeItem(index, id) {
-    selectedItems.splice(index, 1);
-    document.getElementById('inv-opt-' + id).classList.remove('selected');
-    document.getElementById('confirmTradeCheck').checked = false;
+    selectedSenderItems.push({id, img, name, wear, rarity, gameLogo});
+    document.getElementById('inv-opt-sender-' + id).classList.add('selected');
     renderSenderGrid();
 }
 
 function renderSenderGrid() {
     const grid = document.getElementById('senderGrid');
     grid.innerHTML = '';
+    const totalBoxes = 4;
+    for (let i = 0; i < totalBoxes; i++) {
+        const box = document.createElement('div');
+        box.className = 'steam-box';
+        if (selectedSenderItems[i]) {
+            box.classList.add('filled');
+            const logoHtml = selectedSenderItems[i].gameLogo ? `<img src="${selectedSenderItems[i].gameLogo}" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;display:inline-block;margin-bottom:0;">` : '';
+            box.innerHTML = `
+                <img src="${selectedSenderItems[i].img}" alt="">
+                <div class="steam-box-name">${logoHtml}${selectedSenderItems[i].name}</div>
+                <div class="steam-box-meta">Wear: ${selectedSenderItems[i].wear}</div>
+                <div class="steam-box-meta">Rarity: ${selectedSenderItems[i].rarity}</div>
+            `;
+            box.onclick = () => removeSenderItem(i, selectedSenderItems[i].id);
+        } else {
+            box.classList.add('empty');
+        }
+        grid.appendChild(box);
+    }
+    document.getElementById('modalSenderItemId').value = selectedSenderItems.map(item => item.id).join(',');
+    checkFormReady();
+}
+
+function addReceiverItem(id, img, name, wear, rarity, gameLogo) {
+    if (selectedReceiverItems.length >= 3) {
+        alert("You can only select up to 4 items (including the listing) for a single trade.");
+        return;
+    }
+    selectedReceiverItems.push({id, img, name, wear, rarity, gameLogo});
+    document.getElementById('inv-opt-receiver-' + id).classList.add('selected');
+    renderReceiverGrid();
+}
+
+function renderReceiverGrid() {
+    const grid = document.getElementById('receiverGrid');
+    grid.innerHTML = '';
     
-    const totalBoxes = selectedItems.length > 4 ? 8 : 4;
+    const allRecItems = [baseReceiverItem, ...selectedReceiverItems];
+    const totalBoxes = 4;
     
     for (let i = 0; i < totalBoxes; i++) {
         const box = document.createElement('div');
         box.className = 'steam-box';
-        if (selectedItems[i]) {
+        if (allRecItems[i]) {
             box.classList.add('filled');
-            const logoHtml = selectedItems[i].gameLogo ? `<img src="${selectedItems[i].gameLogo}" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;display:inline-block;margin-bottom:0;">` : '';
+            const logoHtml = allRecItems[i].gameLogo ? `<img src="${allRecItems[i].gameLogo}" style="width:12px;height:12px;vertical-align:middle;margin-right:4px;display:inline-block;margin-bottom:0;">` : '';
             box.innerHTML = `
-                <img src="${selectedItems[i].img}" alt="">
-                <div class="steam-box-name">${logoHtml}${selectedItems[i].name}</div>
-                <div class="steam-box-meta">Wear: ${selectedItems[i].wear}</div>
-                <div class="steam-box-meta">Rarity: ${selectedItems[i].rarity}</div>
+                <img src="${allRecItems[i].img}" alt="">
+                <div class="steam-box-name">${logoHtml}${allRecItems[i].name}</div>
+                <div class="steam-box-meta">Wear: ${allRecItems[i].wear}</div>
+                <div class="steam-box-meta">Rarity: ${allRecItems[i].rarity}</div>
             `;
-            box.onclick = () => removeTradeItem(i, selectedItems[i].id);
+            if (i > 0) {
+                box.onclick = () => removeReceiverItem(i - 1, allRecItems[i].id);
+            } else {
+                box.style.cursor = 'default';
+                box.style.borderColor = 'var(--accent)';
+            }
         } else {
             box.classList.add('empty');
         }
         grid.appendChild(box);
     }
     
-    document.getElementById('modalSenderItemId').value = selectedItems.map(item => item.id).join(',');
+    document.getElementById('modalReceiverItemId').value = allRecItems.map(item => item.id).join(',');
     checkFormReady();
 }
 
 function checkFormReady() {
     const isChecked = document.getElementById('confirmTradeCheck').checked;
-    const hasItems = selectedItems.length > 0;
+    const hasItems = selectedSenderItems.length > 0;
     document.getElementById('sendOfferBtn').disabled = !(isChecked && hasItems);
 }
 
