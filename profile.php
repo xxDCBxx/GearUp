@@ -224,15 +224,24 @@ $active_listings = get_active_listings($link, $user_id);
             <h2>Account<br>Information</h2>
             
             <div class="profile-avatar">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                </svg>
+                <?php if (!empty($profile['picture'])): ?>
+                    <img src="<?= htmlspecialchars($profile['picture']) ?>" alt="Avatar" style="width:100%; height:100%; object-fit:cover;">
+                <?php else: ?>
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    </svg>
+                <?php endif; ?>
             </div>
             
             <div class="profile-username-display"><?= htmlspecialchars($profile['name']) ?></div>
             
-            <form class="edit-form" method="POST" action="">
+            <form class="edit-form" method="POST" action="" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="update_profile">
+                
+                <div class="input-wrapper" style="text-align: left;">
+                    <label style="font-size: 12px; color: var(--text-dim); margin-bottom: 4px; display: block; text-transform: uppercase; font-weight: 600;">Profile Picture</label>
+                    <input type="file" name="profile_picture" accept="image/png, image/jpeg, image/gif, image/webp" style="padding: 8px;">
+                </div>
                 
                 <div class="input-wrapper">
                     <input type="text" name="username" value="<?= htmlspecialchars($profile['name']) ?>" placeholder="Username" required>
@@ -255,6 +264,7 @@ $active_listings = get_active_listings($link, $user_id);
                 </div>
                 
                 <button type="submit" class="btn-save">Save Changes</button>
+                <button type="button" class="btn-cancel" style="width: 100%; margin-top: 10px; padding: 12px; font-size: 14px;" onclick="openDeleteAccountModal()">Request Account Deletion</button>
             </form>
         </aside>
 
@@ -319,6 +329,21 @@ $active_listings = get_active_listings($link, $user_id);
     </div>
 </div>
 
+<div class="modal-overlay" id="deleteAccountModal">
+    <div class="modal">
+        <div class="modal-title" style="color: var(--danger);">Request Account Deletion</div>
+        <p style="font-size:14px; color:var(--text-dim); margin-bottom:15px;">Warning: Account deletion is permanent. All your items, credits, and history will be lost. Please provide a reason for deletion. An admin will review your request.</p>
+        <form method="POST">
+            <input type="hidden" name="action" value="request_deletion">
+            <textarea name="reason" rows="4" style="width:100%; background:var(--bg-dark); border:1px solid var(--border); border-radius:4px; color:#fff; padding:10px; font-family:var(--font-body);" required placeholder="Why are you leaving?"></textarea>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeDeleteAccountModal()">Cancel</button>
+                <button type="submit" class="btn-cancel" style="font-size: 14px;">Submit Request</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 function openCancelModal(listingId) {
     document.getElementById('modalCancelListingId').value = listingId;
@@ -330,6 +355,13 @@ function closeCancelModal() {
 document.getElementById('cancelModal').addEventListener('click', function(e) {
     if (e.target === this) closeCancelModal();
 });
+
+function openDeleteAccountModal() {
+    document.getElementById('deleteAccountModal').classList.add('open');
+}
+function closeDeleteAccountModal() {
+    document.getElementById('deleteAccountModal').classList.remove('open');
+}
 </script>
 </body>
 </html>
