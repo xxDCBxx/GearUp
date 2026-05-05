@@ -1,21 +1,35 @@
 <?php
-define('DB_SERVER', 'localhost');
-define('DB_USERNAME', 'root');
-define('DB_PASSWORD', '');
-define('DB_NAME', 'gearup');
+$envFile = __DIR__ . '/.env';
+if (file_exists($envFile)) {
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue; 
+        if (strpos($line, '=') === false) continue;
+        [$key, $value] = explode('=', $line, 2);
+        $key   = trim($key);
+        $value = trim($value, " \t\"'");
+        $_ENV[$key] = $value;
+        putenv("$key=$value");
+    }
+}
+
+define('DB_SERVER', $_ENV['DB_SERVER']);
+define('DB_USERNAME', $_ENV['DB_USERNAME']);
+define('DB_PASSWORD', $_ENV['DB_PASSWORD']);
+define('DB_NAME', $_ENV['DB_NAME']);
 
 define('SITE_NAME', 'GEARUP!');
 define('BACKGROUND_INTERVAL', 5);
 
 // SMTP email settings for password reset email delivery.
 // Replace these values with a working SMTP provider and credentials.
-define('EMAIL_SMTP_HOST', 'smtp.gmail.com');
-define('EMAIL_SMTP_PORT', 587);
-define('EMAIL_SMTP_USER', 'gearupwebsystem@gmail.com');
-define('EMAIL_SMTP_PASS', 'ucdf lbtd kbbl wmuj');
-define('EMAIL_SMTP_SECURE', 'tls'); // use 'tls' or 'ssl'
-define('EMAIL_SMTP_FROM', 'noreply@gearup.com');
-define('EMAIL_SMTP_FROM_NAME', 'GearUp');
+define('EMAIL_SMTP_HOST', $_ENV['EMAIL_SMTP_HOST']);
+define('EMAIL_SMTP_PORT', $_ENV['EMAIL_SMTP_PORT']);
+define('EMAIL_SMTP_USER', $_ENV['EMAIL_SMTP_USER']);
+define('EMAIL_SMTP_PASS', trim($_ENV['EMAIL_SMTP_PASS']));
+define('EMAIL_SMTP_SECURE', $_ENV['EMAIL_SMTP_SECURE']);
+define('EMAIL_SMTP_FROM', $_ENV['EMAIL_SMTP_FROM']);
+define('EMAIL_SMTP_FROM_NAME', $_ENV['EMAIL_SMTP_FROM_NAME']);
 
 $link = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME);
 
