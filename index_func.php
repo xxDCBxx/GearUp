@@ -7,7 +7,6 @@ if(isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] === true){
     exit;
 }
 
-// ── Always clear FP session on restart or fresh visit without action ─────────
 if(!isset($_GET['action']) || $_GET['action'] === 'restart'){
     unset($_SESSION['fp_step'], $_SESSION['fp_email'], $_SESSION['fp_verified'],
           $_SESSION['fp_error'], $_SESSION['fp_success']);
