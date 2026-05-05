@@ -39,17 +39,38 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 if ($row) {
                     $item_id = $row["item_id"];
-                    $ins = mysqli_prepare($link, "INSERT INTO market_listings (user_id, item_id, price) VALUES (?, ?, ?)");
-                    if ($ins) {
-                        mysqli_stmt_bind_param($ins, "iid", $user_id, $item_id, $price);
-                        mysqli_stmt_execute($ins);
-                        mysqli_stmt_close($ins);
+                    
+                    // Check if the item is currently in a pending trade offer
+                    $conflict = false;
+                    $check_sql = "SELECT sender_item_id FROM trade_offers WHERE sender_id = ? AND status = 'pending'";
+                    $check_stmt = mysqli_prepare($link, $check_sql);
+                    if ($check_stmt) {
+                        mysqli_stmt_bind_param($check_stmt, "i", $user_id);
+                        mysqli_stmt_execute($check_stmt);
+                        $check_res = mysqli_stmt_get_result($check_stmt);
+                        while ($check_row = mysqli_fetch_assoc($check_res)) {
+                            $pending_items = array_filter(array_map('intval', explode(',', $check_row['sender_item_id'])));
+                            if (in_array((int)$item_id, $pending_items)) {
+                                $conflict = true;
+                                break;
+                            }
+                        }
+                        mysqli_stmt_close($check_stmt);
                     }
-                    $del = mysqli_prepare($link, "DELETE FROM user_items WHERE id = ? AND user_id = ?");
-                    if ($del) {
-                        mysqli_stmt_bind_param($del, "ii", $uid, $user_id);
-                        mysqli_stmt_execute($del);
-                        mysqli_stmt_close($del);
+                    
+                    if (!$conflict) {
+                        $ins = mysqli_prepare($link, "INSERT INTO market_listings (user_id, item_id, price) VALUES (?, ?, ?)");
+                        if ($ins) {
+                            mysqli_stmt_bind_param($ins, "iid", $user_id, $item_id, $price);
+                            mysqli_stmt_execute($ins);
+                            mysqli_stmt_close($ins);
+                        }
+                        $del = mysqli_prepare($link, "DELETE FROM user_items WHERE id = ? AND user_id = ?");
+                        if ($del) {
+                            mysqli_stmt_bind_param($del, "ii", $uid, $user_id);
+                            mysqli_stmt_execute($del);
+                            mysqli_stmt_close($del);
+                        }
                     }
                 }
             }
