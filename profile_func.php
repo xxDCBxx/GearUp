@@ -65,17 +65,56 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         }
 
         if (!$has_error) {
+            $picture_sql = "";
+            $picture_param = null;
+
+            if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
+                $tmp_name = $_FILES['profile_picture']['tmp_name'];
+                $name = basename($_FILES['profile_picture']['name']);
+                $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+                $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+                if (in_array($ext, $allowed)) {
+                    $dir = "uploads/";
+                    if (!is_dir($dir)) {
+                        mkdir($dir, 0777, true);
+                    }
+                    $new_name = "user_" . $user_id . "_" . time() . "." . $ext;
+                    $dest = $dir . $new_name;
+                    if (move_uploaded_file($tmp_name, $dest)) {
+                        $picture_sql = ", picture = ?";
+                        $picture_param = $dest;
+                    } else {
+                        $_SESSION['flash_profile_error'] = "Failed to upload profile picture.";
+                        header("Location: profile.php");
+                        exit;
+                    }
+                } else {
+                    $_SESSION['flash_profile_error'] = "Invalid image format. Allowed: JPG, PNG, GIF, WEBP.";
+                    header("Location: profile.php");
+                    exit;
+                }
+            }
+
             if (!empty($new_password)) {
                 $hashed_pwd = password_hash($new_password, PASSWORD_DEFAULT);
-                $sql = "UPDATE users SET name = ?, email = ?, password = ? WHERE id = ?";
+                $sql = "UPDATE users SET name = ?, email = ?, password = ?$picture_sql WHERE id = ?";
                 $stmt = mysqli_prepare($link, $sql);
-                mysqli_stmt_bind_param($stmt, "sssi", $new_username, $new_email, $hashed_pwd, $user_id);
+                if ($picture_param) {
+                    mysqli_stmt_bind_param($stmt, "ssssi", $new_username, $new_email, $hashed_pwd, $picture_param, $user_id);
+                } else {
+                    mysqli_stmt_bind_param($stmt, "sssi", $new_username, $new_email, $hashed_pwd, $user_id);
+                }
             } else {
-                $sql = "UPDATE users SET name = ?, email = ? WHERE id = ?";
+                $sql = "UPDATE users SET name = ?, email = ?$picture_sql WHERE id = ?";
                 $stmt = mysqli_prepare($link, $sql);
-                mysqli_stmt_bind_param($stmt, "ssi", $new_username, $new_email, $user_id);
+                if ($picture_param) {
+                    mysqli_stmt_bind_param($stmt, "sssi", $new_username, $new_email, $picture_param, $user_id);
+                } else {
+                    mysqli_stmt_bind_param($stmt, "ssi", $new_username, $new_email, $user_id);
+                }
             }
-            
+
             if (mysqli_stmt_execute($stmt)) {
                 $_SESSION["username"] = $new_username;
                 $_SESSION['flash_profile_success'] = "Profile updated successfully.";
@@ -83,8 +122,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $_SESSION['flash_profile_error'] = "Something went wrong. Please try again.";
             }
             mysqli_stmt_close($stmt);
-        }
-        
+        }        
         header("Location: profile.php");
         exit;
     }
@@ -116,6 +154,31 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             $_SESSION['flash_profile_success'] = "Listing cancelled. Item returned to inventory.";
         }
+        header("Location: profile.php");
+        exit;
+    }
+
+    if ($action === "request_deletion" && !empty($_POST["reason"])) {
+        $reason = trim($_POST["reason"]);
+        
+        $check_stmt = mysqli_prepare($link, "SELECT id FROM deletion_requests WHERE user_id = ? AND status = 'pending'");
+        mysqli_stmt_bind_param($check_stmt, "i", $user_id);
+        mysqli_stmt_execute($check_stmt);
+        mysqli_stmt_store_result($check_stmt);
+        if (mysqli_stmt_num_rows($check_stmt) > 0) {
+            $_SESSION['flash_profile_error'] = "You already have a pending account deletion request.";
+        } else {
+            $stmt = mysqli_prepare($link, "INSERT INTO deletion_requests (user_id, reason) VALUES (?, ?)");
+            mysqli_stmt_bind_param($stmt, "is", $user_id, $reason);
+            if(mysqli_stmt_execute($stmt)) {
+                $_SESSION['flash_profile_success'] = "Account deletion request submitted to admins.";
+            } else {
+                $_SESSION['flash_profile_error'] = "Failed to submit deletion request.";
+            }
+            mysqli_stmt_close($stmt);
+        }
+        mysqli_stmt_close($check_stmt);
+        
         header("Location: profile.php");
         exit;
     }
