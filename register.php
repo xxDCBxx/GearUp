@@ -170,8 +170,18 @@ if($_SERVER["REQUEST_METHOD"] == "POST"){
         <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">
             <input type="text" name="username" placeholder="Username" value="<?php echo htmlspecialchars($username); ?>" required>
             <input type="email" name="email" placeholder="Email" value="<?php echo htmlspecialchars($email); ?>" required>
-            <input type="password" name="password" placeholder="Password" required>
-            <input type="password" name="confirm_password" placeholder="Confirm Password" required>
+            <div class="password-field-wrapper">
+                <input type="password" name="password" placeholder="Password" id="register_password" required>
+                <button type="button" class="toggle-password" onclick="togglePasswordVisibility('register_password')">
+                    <span class="toggle-icon">👁️</span>
+                </button>
+            </div>
+            <div class="password-field-wrapper">
+                <input type="password" name="confirm_password" placeholder="Confirm Password" id="register_confirm_password" required>
+                <button type="button" class="toggle-password" onclick="togglePasswordVisibility('register_confirm_password')">
+                    <span class="toggle-icon">👁️</span>
+                </button>
+            </div>
 
             <button type="submit" class="btn-primary btn-register">Register</button>
         </form>
@@ -180,6 +190,17 @@ if($_SERVER["REQUEST_METHOD"] == "POST"){
             <a href="index.php" style="color: #92bce3;">Sign In</a>
         </div>
     </div>
+
+    <script>
+        function togglePasswordVisibility(fieldId) {
+            const field = document.getElementById(fieldId);
+            if (field.type === 'password') {
+                field.type = 'text';
+            } else {
+                field.type = 'password';
+            }
+        }
+    </script>
 
 </body>
 </html>
