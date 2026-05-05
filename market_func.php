@@ -95,6 +95,33 @@ function get_my_trade_inventory($link, int $user_id): array {
     $result = mysqli_stmt_get_result($stmt);
     $inventory = mysqli_fetch_all($result, MYSQLI_ASSOC);
     mysqli_stmt_close($stmt);
+
+    // Fetch pending trade items to filter them out
+    $pending_items = [];
+    $check_sql = "SELECT sender_item_id FROM trade_offers WHERE sender_id = ? AND status = 'pending'";
+    $check_stmt = mysqli_prepare($link, $check_sql);
+    mysqli_stmt_bind_param($check_stmt, "i", $user_id);
+    mysqli_stmt_execute($check_stmt);
+    $check_res = mysqli_stmt_get_result($check_stmt);
+    while ($row = mysqli_fetch_assoc($check_res)) {
+        if (!empty($row['sender_item_id'])) {
+            $ids = array_filter(array_map('intval', explode(',', $row['sender_item_id'])));
+            $pending_items = array_merge($pending_items, $ids);
+        }
+    }
+    mysqli_stmt_close($check_stmt);
+    $pending_items = array_unique($pending_items);
+
+    if (!empty($pending_items)) {
+        $filtered_inventory = [];
+        foreach ($inventory as $item) {
+            if (!in_array((int)$item['item_id'], $pending_items)) {
+                $filtered_inventory[] = $item;
+            }
+        }
+        return $filtered_inventory;
+    }
+
     return $inventory;
 }
 
@@ -129,6 +156,10 @@ function process_market_purchase($link, $buyer_id, $listing_id) {
         $add_inventory = mysqli_prepare($link, "INSERT INTO user_items (user_id, item_id) VALUES (?, ?)");
         mysqli_stmt_bind_param($add_inventory, "ii", $buyer_id, $listing['item_id']);
         mysqli_stmt_execute($add_inventory);
+
+        $add_history = mysqli_prepare($link, "INSERT INTO market_history (buyer_id, seller_id, item_id, price) VALUES (?, ?, ?, ?)");
+        mysqli_stmt_bind_param($add_history, "iiid", $buyer_id, $listing['seller_id'], $listing['item_id'], $listing['price']);
+        mysqli_stmt_execute($add_history);
 
         mysqli_commit($link);
         return ["success" => true, "new_balance" => number_format($listing['buyer_credits'] - $listing['price'], 2)];
