@@ -295,11 +295,10 @@ foreach($items as $row) {
                         </div>
                     </div>
                     <div class="item-card-footer">
-                        <button type="button" class="btn btn-accent btn-sm" style="flex:1;"
+                        <button type="button" class="btn btn-accent btn-sm" style="width:100%;"
                                 onclick='openListModal(<?= $item['user_item_id'] ?>, <?= htmlspecialchars(json_encode($item['name']), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($item['image'] ?? ''), ENT_QUOTES, 'UTF-8') ?>)'>
                             List Item
                         </button>
-                        <button type="button" class="btn btn-danger btn-sm" onclick="openDeleteModal(<?= $item['user_item_id'] ?>)">Delete</button>
                     </div>
                 </div>
                 <?php endforeach; ?>
@@ -353,21 +352,6 @@ foreach($items as $row) {
     </div>
 </div>
 
-<div class="modal-overlay" id="deleteModal">
-    <div class="modal">
-        <div class="modal-title">Confirm Deletion</div>
-        <p style="font-size:14px; color:var(--text-dim); margin-bottom:20px;">Are you sure you want to permanently delete this item from your inventory? This action cannot be undone.</p>
-        <form method="POST" id="deleteForm">
-            <input type="hidden" name="action" value="remove_item">
-            <input type="hidden" name="user_item_id" id="modalDeleteItemId">
-            <div class="modal-footer">
-                <button type="button" class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
-                <button type="submit" class="btn btn-danger">Confirm Delete</button>
-            </div>
-        </form>
-    </div>
-</div>
-
 <script>
 function openListModal(userItemId, name, image) {
     document.getElementById('modalUserItemId').value = userItemId;
@@ -381,17 +365,6 @@ function closeListModal() {
 }
 document.getElementById('listModal').addEventListener('click', function(e) {
     if (e.target === this) closeListModal();
-});
-
-function openDeleteModal(userItemId) {
-    document.getElementById('modalDeleteItemId').value = userItemId;
-    document.getElementById('deleteModal').classList.add('open');
-}
-function closeDeleteModal() {
-    document.getElementById('deleteModal').classList.remove('open');
-}
-document.getElementById('deleteModal').addEventListener('click', function(e) {
-    if (e.target === this) closeDeleteModal();
 });
 </script>
 </body>
