@@ -21,9 +21,10 @@ body {
     justify-content: center;
     align-items: center;
     overflow: hidden;
-    background-color: #041421;
+    background-color: #041421; /* Fallback */
 }
 
+/* Crossfade Background Implementation */
 .bg-layer {
     position: absolute;
     top: 0; 
