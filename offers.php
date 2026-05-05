@@ -53,7 +53,7 @@ $offers = get_user_offers($link, $user_id, $tab);
                     <div class="steam-side-desc">These are the items you will lose in the trade.</div>
                     <div class="steam-grid">
                         <?php 
-                        $boxes = count($give_items) > 4 ? 8 : 4;
+                        $boxes = max(4, count($give_items));
                         for($i=0; $i<$boxes; $i++): 
                             if(isset($give_items[$i])): 
                                 $gi = offers_game_info($give_items[$i]['game'] ?? '');
@@ -81,7 +81,7 @@ $offers = get_user_offers($link, $user_id, $tab);
                     <div class="steam-side-desc">These are the items you will receive in the trade.</div>
                     <div class="steam-grid">
                         <?php 
-                        $boxes = count($receive_items) > 4 ? 8 : 4;
+                        $boxes = max(4, count($receive_items));
                         for($i=0; $i<$boxes; $i++): 
                             if(isset($receive_items[$i])): 
                                 $gi = offers_game_info($receive_items[$i]['game'] ?? '');
