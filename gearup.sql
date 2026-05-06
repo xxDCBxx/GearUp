@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 06, 2026 at 05:58 PM
+-- Generation Time: May 06, 2026 at 06:29 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -11,6 +11,8 @@ SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
 
+-- Temporarily disable foreign key checks to allow importing tables out of order
+SET FOREIGN_KEY_CHECKS = 0;
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -134,7 +136,9 @@ INSERT INTO `market_history` (`id`, `buyer_id`, `seller_id`, `item_id`, `price`,
 (1, 2, 1, 1, 300.00, '2026-05-05 16:48:40'),
 (2, 2, 1, 1, 5.00, '2026-05-05 17:37:42'),
 (3, 2, 1, 4, 5000.00, '2026-05-05 17:52:02'),
-(4, 7, 1, 3, 10000.00, '2026-05-06 11:22:32');
+(4, 7, 1, 3, 10000.00, '2026-05-06 11:22:32'),
+(5, 7, 1, 17, 400.00, '2026-05-06 16:09:29'),
+(6, 7, 1, 5, 1500.00, '2026-05-06 16:20:13');
 
 -- --------------------------------------------------------
 
@@ -160,10 +164,7 @@ INSERT INTO `market_listings` (`id`, `user_id`, `item_id`, `price`, `status`, `c
 (49, 1, 19, 5000.00, 'active', '2026-04-28 18:28:14'),
 (65, 1, 18, 500.00, 'active', '2026-05-06 14:39:33'),
 (66, 1, 1, 350.00, 'active', '2026-05-06 14:39:37'),
-(67, 1, 20, 100.00, 'active', '2026-05-06 14:39:44'),
-(68, 1, 8, 750.00, 'active', '2026-05-06 14:39:49'),
-(69, 1, 5, 1500.00, 'active', '2026-05-06 14:39:58'),
-(70, 1, 17, 400.00, 'active', '2026-05-06 14:40:10');
+(67, 1, 20, 100.00, 'active', '2026-05-06 14:39:44');
 
 -- --------------------------------------------------------
 
@@ -262,7 +263,8 @@ CREATE TABLE `trade_history` (
 INSERT INTO `trade_history` (`id`, `user1_id`, `user2_id`, `user1_items`, `user2_items`, `created_at`) VALUES
 (1, 2, 1, '14', '20', '2026-05-05 17:30:09'),
 (2, 2, 1, '5', '18', '2026-05-05 17:49:13'),
-(3, 2, 1, '8,5', '10', '2026-05-05 17:57:47');
+(3, 2, 1, '8,5', '10', '2026-05-05 17:57:47'),
+(4, 7, 1, '3', '8', '2026-05-06 16:22:29');
 
 -- --------------------------------------------------------
 
@@ -297,7 +299,8 @@ INSERT INTO `trade_offers` (`id`, `sender_id`, `receiver_id`, `sender_item_id`, 
 (10, 2, 1, '14', '20', 'accepted', '2026-05-05 17:29:25'),
 (11, 2, 1, '5', '18', 'accepted', '2026-05-05 17:49:03'),
 (12, 2, 1, '8,5', '4', 'cancelled', '2026-05-05 17:51:55'),
-(13, 2, 1, '8,5', '10', 'accepted', '2026-05-05 17:57:23');
+(13, 2, 1, '8,5', '10', 'accepted', '2026-05-05 17:57:23'),
+(14, 7, 1, '3', '8', 'accepted', '2026-05-06 16:21:57');
 
 -- --------------------------------------------------------
 
@@ -338,11 +341,11 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `picture`, `email`, `password`, `credits`, `is_admin`, `deleted_at`) VALUES
-(1, 'user1', 'uploads/user_1_1778001172.jpg', 'user1@gmail.com', '$2y$10$abcdefghijklmnopqrstuup2sflzdS6S5FvdNjAk9faR2QjpMgeuO', 22257, 0, NULL),
+(1, 'user1', 'uploads/user_1_1778001172.jpg', 'user1@gmail.com', '$2y$10$abcdefghijklmnopqrstuup2sflzdS6S5FvdNjAk9faR2QjpMgeuO', 24157, 0, NULL),
 (2, 'user2', '', 'user@gmail.com', '$2y$10$faYBeLLjauYW0ISq.zdE7u0LayhsjiF.cN089kPgqhN0oETHYulia', 7743, 0, NULL),
 (3, 'admin', '', 'admin@gearup.com', '$2y$10$W6hU1Q8OpJTfJc1uNI0pAesBUprhIJq5yG4XJsBHwJxUgrEP7CGmK', 10000, 1, NULL),
 (6, 'user3', '', 'user3@gmail.com', '$2y$10$y7YyV7iGFDK4N8.GRxeLLuEyQjGAI9iOAh3NcloCDCMv9MaKr9m3S', 99999, 0, NULL),
-(7, 'brevin', '', 'brevincortez03@gmail.com', '$2y$10$gDK9E1gUgzDiLI051aueke8OmqDIVMfw0AgEkt3ORSALTkmydMW/W', 7001, 0, NULL);
+(7, 'brevin', '', 'brevincortez03@gmail.com', '$2y$10$gDK9E1gUgzDiLI051aueke8OmqDIVMfw0AgEkt3ORSALTkmydMW/W', 5101, 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -372,7 +375,10 @@ INSERT INTO `user_items` (`id`, `user_id`, `item_id`) VALUES
 (65, 2, 14),
 (70, 2, 4),
 (71, 2, 10),
-(72, 7, 3);
+(72, 1, 3),
+(73, 7, 17),
+(74, 7, 5),
+(75, 7, 8);
 
 --
 -- Indexes for dumped tables
@@ -518,7 +524,7 @@ ALTER TABLE `items`
 -- AUTO_INCREMENT for table `market_history`
 --
 ALTER TABLE `market_history`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `market_listings`
@@ -548,13 +554,13 @@ ALTER TABLE `topup_requests`
 -- AUTO_INCREMENT for table `trade_history`
 --
 ALTER TABLE `trade_history`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `trade_offers`
 --
 ALTER TABLE `trade_offers`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `transactions`
@@ -572,7 +578,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `user_items`
 --
 ALTER TABLE `user_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=73;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=76;
 
 --
 -- Constraints for dumped tables
@@ -626,6 +632,9 @@ ALTER TABLE `transactions`
 ALTER TABLE `user_items`
   ADD CONSTRAINT `fk_inventory_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_inventory_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+-- Re-enable foreign key checks now that all tables and data are inserted
+SET FOREIGN_KEY_CHECKS = 1;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
