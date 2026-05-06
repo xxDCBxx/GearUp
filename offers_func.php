@@ -52,6 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($offer) {
                 mysqli_begin_transaction($link);
                 try {
+                    // 1. Mark offer as accepted
                     $update_stmt = mysqli_prepare($link, "UPDATE trade_offers SET status = 'accepted' WHERE id = ?");
                     mysqli_stmt_bind_param($update_stmt, "i", $offer_id);
                     mysqli_stmt_execute($update_stmt);
@@ -60,29 +61,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sender_items = array_filter(array_map('intval', explode(',', $offer['sender_item_id'])));
                     $receiver_items = array_filter(array_map('intval', explode(',', $offer['receiver_item_id'])));
 
+                    // 2. Transfer SENDER items to RECEIVER
                     foreach ($sender_items as $item_id) {
-                        $swap_stmt = mysqli_prepare($link, "UPDATE user_items SET user_id = ? WHERE item_id = ? AND user_id = ? LIMIT 1");
-                        mysqli_stmt_bind_param($swap_stmt, "iii", $user_id, $item_id, $offer['sender_id']);
-                        mysqli_stmt_execute($swap_stmt);
-                        mysqli_stmt_close($swap_stmt);
+                        $del = mysqli_prepare($link, "DELETE FROM market_listings WHERE item_id = ? AND user_id = ?");
+                        mysqli_stmt_bind_param($del, "ii", $item_id, $offer['sender_id']);
+                        mysqli_stmt_execute($del);
+                        $was_market = mysqli_stmt_affected_rows($del) > 0;
+                        mysqli_stmt_close($del);
+
+                        if ($was_market) {
+                            $ins = mysqli_prepare($link, "INSERT INTO user_items (user_id, item_id) VALUES (?, ?)");
+                            mysqli_stmt_bind_param($ins, "ii", $user_id, $item_id);
+                            mysqli_stmt_execute($ins);
+                            mysqli_stmt_close($ins);
+                        } else {
+                            $swap = mysqli_prepare($link, "UPDATE user_items SET user_id = ? WHERE item_id = ? AND user_id = ? LIMIT 1");
+                            mysqli_stmt_bind_param($swap, "iii", $user_id, $item_id, $offer['sender_id']);
+                            mysqli_stmt_execute($swap);
+                            mysqli_stmt_close($swap);
+                        }
                     }
 
+                    // 3. Transfer RECEIVER items to SENDER
                     foreach ($receiver_items as $item_id) {
-                        $swap_stmt = mysqli_prepare($link, "UPDATE user_items SET user_id = ? WHERE item_id = ? AND user_id = ? LIMIT 1");
-                        mysqli_stmt_bind_param($swap_stmt, "iii", $offer['sender_id'], $item_id, $user_id);
-                        mysqli_stmt_execute($swap_stmt);
-                        mysqli_stmt_close($swap_stmt);
+                        $del = mysqli_prepare($link, "DELETE FROM market_listings WHERE item_id = ? AND user_id = ?");
+                        mysqli_stmt_bind_param($del, "ii", $item_id, $user_id);
+                        mysqli_stmt_execute($del);
+                        $was_market = mysqli_stmt_affected_rows($del) > 0;
+                        mysqli_stmt_close($del);
+
+                        if ($was_market) {
+                            $ins = mysqli_prepare($link, "INSERT INTO user_items (user_id, item_id) VALUES (?, ?)");
+                            mysqli_stmt_bind_param($ins, "ii", $offer['sender_id'], $item_id);
+                            mysqli_stmt_execute($ins);
+                            mysqli_stmt_close($ins);
+                        } else {
+                            $swap = mysqli_prepare($link, "UPDATE user_items SET user_id = ? WHERE item_id = ? AND user_id = ? LIMIT 1");
+                            mysqli_stmt_bind_param($swap, "iii", $offer['sender_id'], $item_id, $user_id);
+                            mysqli_stmt_execute($swap);
+                            mysqli_stmt_close($swap);
+                        }
                     }
 
+                    // 4. Record the trade in history
                     $history_stmt = mysqli_prepare($link, "INSERT INTO trade_history (user1_id, user2_id, user1_items, user2_items) VALUES (?, ?, ?, ?)");
                     mysqli_stmt_bind_param($history_stmt, "iiss", $offer['sender_id'], $user_id, $offer['sender_item_id'], $offer['receiver_item_id']);
                     mysqli_stmt_execute($history_stmt);
                     mysqli_stmt_close($history_stmt);
 
+                    // 5. Cancel any other pending offers that involve the items that were just traded
                     $all_traded_items = array_merge($sender_items, $receiver_items);
                     foreach ($all_traded_items as $traded_item) {
                         mysqli_query($link, "UPDATE trade_offers SET status = 'cancelled' WHERE status = 'pending' AND (FIND_IN_SET('$traded_item', sender_item_id) OR FIND_IN_SET('$traded_item', receiver_item_id))");
                     }
+
+                    // 6. Fetch emails and notify both users
+                    $email_sql = "SELECT id, email FROM users WHERE id IN (?, ?)";
+                    $em_stmt = mysqli_prepare($link, $email_sql);
+                    mysqli_stmt_bind_param($em_stmt, "ii", $offer['sender_id'], $user_id);
+                    mysqli_stmt_execute($em_stmt);
+                    $em_res = mysqli_stmt_get_result($em_stmt);
+                    
+                    $trade_users = [];
+                    while ($u_row = mysqli_fetch_assoc($em_res)) {
+                        $trade_users[$u_row['id']] = $u_row['email'];
+                    }
+                    mysqli_stmt_close($em_stmt);
+
+                    $sender_email = $trade_users[$offer['sender_id']] ?? '';
+                    $receiver_email = $trade_users[$user_id] ?? '';
+
+                    $subject = "Trade Successfully Completed - GEARUP!";
+                    $message = "Good news! A trade offer has been accepted and successfully completed.\r\n\r\nPlease log in to GEARUP! and check your inventory to view your new items.\r\n\r\n- The GEARUP! Team";
+
+                    if ($sender_email) send_smtp_email($sender_email, $subject, $message);
+                    if ($receiver_email) send_smtp_email($receiver_email, $subject, $message);
 
                     mysqli_commit($link);
                 } catch (Exception $e) {
