@@ -107,6 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $history_stmt = mysqli_prepare($link, "INSERT INTO trade_history (user1_id, user2_id, user1_items, user2_items) VALUES (?, ?, ?, ?)");
                     mysqli_stmt_bind_param($history_stmt, "iiss", $offer['sender_id'], $user_id, $offer['sender_item_id'], $offer['receiver_item_id']);
                     mysqli_stmt_execute($history_stmt);
+                    $history_id = mysqli_insert_id($link); // Capture the transaction ID
                     mysqli_stmt_close($history_stmt);
 
                     // 5. Cancel any other pending offers that involve the items that were just traded
@@ -115,27 +116,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         mysqli_query($link, "UPDATE trade_offers SET status = 'cancelled' WHERE status = 'pending' AND (FIND_IN_SET('$traded_item', sender_item_id) OR FIND_IN_SET('$traded_item', receiver_item_id))");
                     }
 
-                    // 6. Fetch emails and notify both users
-                    $email_sql = "SELECT id, email FROM users WHERE id IN (?, ?)";
-                    $em_stmt = mysqli_prepare($link, $email_sql);
-                    mysqli_stmt_bind_param($em_stmt, "ii", $offer['sender_id'], $user_id);
-                    mysqli_stmt_execute($em_stmt);
-                    $em_res = mysqli_stmt_get_result($em_stmt);
+                    // 6. Fetch user details and item names for the email receipt
+                    $user_info_sql = "SELECT id, email, credits FROM users WHERE id IN (?, ?)";
+                    $ui_stmt = mysqli_prepare($link, $user_info_sql);
+                    mysqli_stmt_bind_param($ui_stmt, "ii", $offer['sender_id'], $user_id);
+                    mysqli_stmt_execute($ui_stmt);
+                    $ui_res = mysqli_stmt_get_result($ui_stmt);
                     
                     $trade_users = [];
-                    while ($u_row = mysqli_fetch_assoc($em_res)) {
-                        $trade_users[$u_row['id']] = $u_row['email'];
+                    while ($u_row = mysqli_fetch_assoc($ui_res)) {
+                        $trade_users[$u_row['id']] = $u_row;
                     }
-                    mysqli_stmt_close($em_stmt);
+                    mysqli_stmt_close($ui_stmt);
 
-                    $sender_email = $trade_users[$offer['sender_id']] ?? '';
-                    $receiver_email = $trade_users[$user_id] ?? '';
+                    $sender_names = [];
+                    if (!empty($sender_items)) {
+                        $in = implode(',', $sender_items);
+                        $res = mysqli_query($link, "SELECT name FROM items WHERE id IN ($in)");
+                        while ($row = mysqli_fetch_assoc($res)) { $sender_names[] = $row['name']; }
+                    }
 
-                    $subject = "Trade Successfully Completed - GEARUP!";
-                    $message = "Good news! A trade offer has been accepted and successfully completed.\r\n\r\nPlease log in to GEARUP! and check your inventory to view your new items.\r\n\r\n- The GEARUP! Team";
+                    $receiver_names = [];
+                    if (!empty($receiver_items)) {
+                        $in = implode(',', $receiver_items);
+                        $res = mysqli_query($link, "SELECT name FROM items WHERE id IN ($in)");
+                        while ($row = mysqli_fetch_assoc($res)) { $receiver_names[] = $row['name']; }
+                    }
 
-                    if ($sender_email) send_smtp_email($sender_email, $subject, $message);
-                    if ($receiver_email) send_smtp_email($receiver_email, $subject, $message);
+                    // Build and send Sender Email
+                    $sender_item_rows = [];
+                    foreach ($sender_names as $n) $sender_item_rows[] = ['name' => 'Gave Away - ' . $n, 'price' => '--'];
+                    foreach ($receiver_names as $n) $sender_item_rows[] = ['name' => 'Received - ' . $n, 'price' => '--'];
+                    
+                    $sender_credits = number_format($trade_users[$offer['sender_id']]['credits'] ?? 0, 2);
+                    $sender_html = generate_receipt_email_body(
+                        "Trade Completed",
+                        $sender_item_rows,
+                        ['Initial Balance' => '$' . $sender_credits, 'New Balance' => '$' . $sender_credits],
+                        ['Confirmation ID' => $history_id, 'Date Confirmed' => date('r')]
+                    );
+
+                    // Build and send Receiver Email
+                    $receiver_item_rows = [];
+                    foreach ($receiver_names as $n) $receiver_item_rows[] = ['name' => 'Gave Away - ' . $n, 'price' => '--'];
+                    foreach ($sender_names as $n) $receiver_item_rows[] = ['name' => 'Received - ' . $n, 'price' => '--'];
+
+                    $receiver_credits = number_format($trade_users[$user_id]['credits'] ?? 0, 2);
+                    $receiver_html = generate_receipt_email_body(
+                        "Trade Completed",
+                        $receiver_item_rows,
+                        ['Initial Balance' => '$' . $receiver_credits, 'New Balance' => '$' . $receiver_credits],
+                        ['Confirmation ID' => $history_id, 'Date Confirmed' => date('r')]
+                    );
+
+                    $subject = "Trade Completed - GEARUP!";
+                    if (!empty($trade_users[$offer['sender_id']]['email'])) {
+                        send_smtp_email($trade_users[$offer['sender_id']]['email'], $subject, $sender_html, EMAIL_SMTP_FROM, EMAIL_SMTP_FROM_NAME, true);
+                    }
+                    if (!empty($trade_users[$user_id]['email'])) {
+                        send_smtp_email($trade_users[$user_id]['email'], $subject, $receiver_html, EMAIL_SMTP_FROM, EMAIL_SMTP_FROM_NAME, true);
+                    }
 
                     mysqli_commit($link);
                 } catch (Exception $e) {
