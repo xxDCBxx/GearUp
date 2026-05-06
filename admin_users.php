@@ -2,7 +2,6 @@
 require_once "connections.php";
 start_safe_session();
 
-// Must be logged in and admin
 if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
     header("location: index.php"); exit;
 }
@@ -17,91 +16,139 @@ mysqli_stmt_close($chk);
 if (!$admin_flag) { header("location: home.php"); exit; }
 
 $active_page = 'admin_users';
-$sub = $_GET['sub'] ?? 'manage';   // 'manage' | 'deleted'
-$msg = '';
-$msg_type = 'success';
+$sub = $_GET['sub'] ?? 'manage';   // 'manage' | 'admins' | 'deleted'
+
+// ── Helper: check if a user_id belongs to the protected super-admin ────────
+function is_protected_admin($link, $user_id) {
+    $s = mysqli_prepare($link, "SELECT email FROM users WHERE id = ?");
+    mysqli_stmt_bind_param($s, "i", $user_id);
+    mysqli_stmt_execute($s);
+    mysqli_stmt_bind_result($s, $email);
+    mysqli_stmt_fetch($s);
+    mysqli_stmt_close($s);
+    return strtolower($email) === 'admin@gearup.com';
+}
 
 // ── Handle POST actions ────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action  = $_POST['action']  ?? '';
     $user_id = intval($_POST['user_id'] ?? 0);
 
-    // Toggle admin flag
-    if ($action === 'toggle_admin' && $user_id && $user_id !== $me) {
-        $s = mysqli_prepare($link, "UPDATE users SET is_admin = NOT is_admin WHERE id = ?");
+    // Edit user (username, email, credits, admin flag)
+    if ($action === 'edit_user' && $user_id) {
+        $username      = trim($_POST['username'] ?? '');
+        $email         = trim($_POST['email'] ?? '');
+        $credits       = (float)($_POST['credits'] ?? 0);
+        $is_admin_flag = isset($_POST['is_admin']) ? 1 : 0;
+        if ($user_id == $me) { $is_admin_flag = 1; }               // protect self from de-admining
+        if (is_protected_admin($link, $user_id)) { $is_admin_flag = 1; } // protect super-admin
+
+        $s = mysqli_prepare($link,
+            "UPDATE users SET name = ?, email = ?, credits = ?, is_admin = ? WHERE id = ?");
         if (!$s) { die("DB error: " . mysqli_error($link)); }
-        mysqli_stmt_bind_param($s, "i", $user_id);
-        mysqli_stmt_execute($s);
+        mysqli_stmt_bind_param($s, "ssdii", $username, $email, $credits, $is_admin_flag, $user_id);
+        if (mysqli_stmt_execute($s)) {
+            $_SESSION['flash_admin_success'] = "User updated successfully.";
+        } else {
+            $_SESSION['flash_admin_error'] = "Failed to update user.";
+        }
         mysqli_stmt_close($s);
-        $msg = "Admin status updated.";
+    }
+
+    // Toggle admin flag
+    elseif ($action === 'toggle_admin' && $user_id && $user_id != $me) {
+        if (is_protected_admin($link, $user_id)) {
+            $_SESSION['flash_admin_error'] = "This admin account is protected and cannot have its status removed.";
+        } else {
+            $s = mysqli_prepare($link, "UPDATE users SET is_admin = NOT is_admin WHERE id = ?");
+            if (!$s) { die("DB error: " . mysqli_error($link)); }
+            mysqli_stmt_bind_param($s, "i", $user_id);
+            mysqli_stmt_execute($s);
+            mysqli_stmt_close($s);
+            $_SESSION['flash_admin_success'] = "Admin status updated.";
+        }
     }
 
     // Soft-delete a user
-    if ($action === 'delete_user' && $user_id && $user_id !== $me) {
-        // Ensure the column exists (safe to run every time — MySQL ignores if exists would need IF NOT EXISTS trick)
-        // We assume the schema already has deleted_at DATETIME NULL DEFAULT NULL on users table.
-        // Cancel all their active market listings (keep the item in inventory so restore works)
+    elseif ($action === 'delete_user' && $user_id && $user_id != $me) {
         mysqli_query($link, "UPDATE market_listings SET status='cancelled' WHERE user_id=$user_id AND status='active'");
-        // Soft-delete
         $s = mysqli_prepare($link, "UPDATE users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL");
         if (!$s) { die("DB error: " . mysqli_error($link)); }
         mysqli_stmt_bind_param($s, "i", $user_id);
-        mysqli_stmt_execute($s);
+        if (mysqli_stmt_execute($s)) {
+            $_SESSION['flash_admin_success'] = "User soft-deleted. Their data is fully preserved and can be restored.";
+        } else {
+            $_SESSION['flash_admin_error'] = "Failed to delete user.";
+        }
         mysqli_stmt_close($s);
-        $msg = "User soft-deleted. Their data is preserved.";
-        $msg_type = 'warn';
     }
 
-    // Restore (undo delete) a user
-    if ($action === 'restore_user' && $user_id) {
+    // Restore a soft-deleted user
+    elseif ($action === 'restore_user' && $user_id) {
         $s = mysqli_prepare($link, "UPDATE users SET deleted_at = NULL WHERE id = ?");
         if (!$s) { die("DB error: " . mysqli_error($link)); }
         mysqli_stmt_bind_param($s, "i", $user_id);
-        mysqli_stmt_execute($s);
+        if (mysqli_stmt_execute($s)) {
+            $_SESSION['flash_admin_success'] = "Account restored successfully.";
+        } else {
+            $_SESSION['flash_admin_error'] = "Failed to restore account.";
+        }
         mysqli_stmt_close($s);
-        $msg = "Account restored successfully.";
+        $sub = 'deleted';
     }
 
-    // Update credits
-    if ($action === 'update_credits' && $user_id) {
-        $new_credits = floatval($_POST['credits'] ?? 0);
+    // Update credits only
+    elseif ($action === 'update_credits' && $user_id) {
+        $new_credits = (float)($_POST['credits'] ?? 0);
         $s = mysqli_prepare($link, "UPDATE users SET credits = ? WHERE id = ?");
         if (!$s) { die("DB error: " . mysqli_error($link)); }
         mysqli_stmt_bind_param($s, "di", $new_credits, $user_id);
-        mysqli_stmt_execute($s);
+        if (mysqli_stmt_execute($s)) {
+            $_SESSION['flash_admin_success'] = "Credits updated.";
+        } else {
+            $_SESSION['flash_admin_error'] = "Failed to update credits.";
+        }
         mysqli_stmt_close($s);
-        $msg = "Credits updated.";
     }
 
-    header("Location: admin_users.php?sub=$sub" . ($msg ? "&msg=" . urlencode($msg) . "&mt=$msg_type" : ''));
+    header("Location: admin_users.php?sub=$sub");
     exit;
 }
-
-if (isset($_GET['msg'])) { $msg = $_GET['msg']; $msg_type = $_GET['mt'] ?? 'success'; }
 
 // ── Fetch users ────────────────────────────────────────────────────────────
 $search = trim($_GET['q'] ?? '');
 
 if ($sub === 'deleted') {
-    // Deleted users
     $sql = "SELECT u.id, u.name, u.email, u.credits, u.is_admin, u.picture, u.deleted_at,
-                   (SELECT COUNT(*) FROM user_items WHERE user_id = u.id) AS item_count,
-                   (SELECT COUNT(*) FROM market_listings WHERE user_id = u.id) AS listing_count,
-                   (SELECT COUNT(*) FROM trade_offers WHERE sender_id = u.id OR receiver_id = u.id) AS offer_count
+                   (SELECT COUNT(*) FROM user_items WHERE user_id = u.id)                             AS item_count,
+                   (SELECT COUNT(*) FROM market_listings WHERE user_id = u.id)                        AS listing_count,
+                   (SELECT COUNT(*) FROM trade_offers WHERE sender_id = u.id OR receiver_id = u.id)   AS offer_count
             FROM users u
             WHERE u.deleted_at IS NOT NULL";
     if ($search) { $sql .= " AND (u.name LIKE ? OR u.email LIKE ?)"; }
     $sql .= " ORDER BY u.deleted_at DESC";
-} else {
-    // Active users
+
+} elseif ($sub === 'admins') {
+    // Admins only (not deleted)
     $sql = "SELECT u.id, u.name, u.email, u.credits, u.is_admin, u.picture, u.deleted_at,
-                   (SELECT COUNT(*) FROM user_items WHERE user_id = u.id) AS item_count,
-                   (SELECT COUNT(*) FROM market_listings WHERE user_id = u.id AND status='active') AS listing_count,
-                   (SELECT COUNT(*) FROM trade_offers WHERE sender_id = u.id OR receiver_id = u.id) AS offer_count
+                   (SELECT COUNT(*) FROM user_items WHERE user_id = u.id)                                    AS item_count,
+                   (SELECT COUNT(*) FROM market_listings WHERE user_id = u.id AND status='active')           AS listing_count,
+                   (SELECT COUNT(*) FROM trade_offers WHERE sender_id = u.id OR receiver_id = u.id)          AS offer_count
             FROM users u
-            WHERE u.deleted_at IS NULL";
+            WHERE u.deleted_at IS NULL AND u.is_admin = 1";
     if ($search) { $sql .= " AND (u.name LIKE ? OR u.email LIKE ?)"; }
-    $sql .= " ORDER BY u.is_admin DESC, u.name ASC";
+    $sql .= " ORDER BY u.name ASC";
+
+} else {
+    // Regular (non-admin) users only, not deleted
+    $sql = "SELECT u.id, u.name, u.email, u.credits, u.is_admin, u.picture, u.deleted_at,
+                   (SELECT COUNT(*) FROM user_items WHERE user_id = u.id)                                    AS item_count,
+                   (SELECT COUNT(*) FROM market_listings WHERE user_id = u.id AND status='active')           AS listing_count,
+                   (SELECT COUNT(*) FROM trade_offers WHERE sender_id = u.id OR receiver_id = u.id)          AS offer_count
+            FROM users u
+            WHERE u.deleted_at IS NULL AND u.is_admin = 0";
+    if ($search) { $sql .= " AND (u.name LIKE ? OR u.email LIKE ?)"; }
+    $sql .= " ORDER BY u.name ASC";
 }
 
 $stmt = mysqli_prepare($link, $sql);
@@ -115,6 +162,11 @@ $result = mysqli_stmt_get_result($stmt);
 $users  = [];
 while ($row = mysqli_fetch_assoc($result)) { $users[] = $row; }
 mysqli_stmt_close($stmt);
+
+// ── Badge counts for sub-nav ───────────────────────────────────────────────
+$count_manage  = (int) mysqli_fetch_row(mysqli_query($link, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND is_admin = 0"))[0];
+$count_admins  = (int) mysqli_fetch_row(mysqli_query($link, "SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND is_admin = 1"))[0];
+$count_deleted = (int) mysqli_fetch_row(mysqli_query($link, "SELECT COUNT(*) FROM users WHERE deleted_at IS NOT NULL"))[0];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -126,66 +178,42 @@ mysqli_stmt_close($stmt);
     <style>
         /* ── Sub-nav bar ──────────────────────────────────────────────── */
         .sub-nav {
-            display: flex;
-            align-items: center;
-            gap: 0;
-            padding: 0 40px;
-            background: var(--bg-card);
-            border-bottom: 1px solid var(--border);
-            height: 46px;
+            display: flex; align-items: center; gap: 0; padding: 0 40px;
+            background: var(--bg-card); border-bottom: 1px solid var(--border); height: 46px;
         }
         .sub-nav-link {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            padding: 0 20px;
-            height: 100%;
-            font-family: var(--font-display);
-            font-size: 15px;
-            font-weight: 600;
-            color: var(--text-dim);
-            text-decoration: none;
-            border-bottom: 3px solid transparent;
-            transition: color .2s, border-color .2s;
+            display: flex; align-items: center; gap: 7px;
+            padding: 0 20px; height: 100%;
+            font-family: var(--font-display); font-size: 15px; font-weight: 600;
+            color: var(--text-dim); text-decoration: none;
+            border-bottom: 3px solid transparent; transition: color .2s, border-color .2s;
         }
         .sub-nav-link:hover { color: var(--text); }
         .sub-nav-link.active { color: #fff; border-bottom-color: var(--accent); }
         .sub-nav-badge {
-            background: var(--bg-card-2);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            padding: 1px 7px;
-            color: var(--text-muted);
+            background: var(--bg-card-2); border: 1px solid var(--border);
+            border-radius: 20px; font-size: 11px; font-weight: 700;
+            padding: 1px 7px; color: var(--text-muted);
         }
+        .sub-nav-link.active .sub-nav-badge { background: var(--accent); color: #fff; border-color: var(--accent); }
         /* ── Page layout ──────────────────────────────────────────────── */
         .admin-page { padding: 32px 40px; max-width: 1400px; margin: 0 auto; }
         .page-header {
             display: flex; align-items: center; justify-content: space-between;
             margin-bottom: 28px; flex-wrap: wrap; gap: 14px;
         }
-        .page-title {
-            font-family: var(--font-display); font-size: 26px; font-weight: 700;
-            color: #fff; letter-spacing: .5px;
-        }
+        .page-title { font-family: var(--font-display); font-size: 26px; font-weight: 700; color: #fff; letter-spacing: .5px; }
         .page-title span { color: var(--accent); }
-        .search-bar {
-            display: flex; align-items: center; gap: 10px;
-        }
+        .search-bar { display: flex; align-items: center; gap: 10px; }
         .search-bar input {
             background: var(--bg-card-2); border: 1px solid var(--border);
             border-radius: var(--radius); color: var(--text);
             font-family: var(--font-body); font-size: 14px;
-            padding: 9px 14px; outline: none; width: 260px;
-            transition: border-color .2s;
+            padding: 9px 14px; outline: none; width: 260px; transition: border-color .2s;
         }
         .search-bar input:focus { border-color: var(--accent); }
         /* ── Table card ───────────────────────────────────────────────── */
-        .table-card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: var(--radius-lg); overflow: hidden;
-        }
+        .table-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
         .users-table { width: 100%; border-collapse: collapse; }
         .users-table th {
             text-align: left; padding: 13px 18px;
@@ -193,9 +221,7 @@ mysqli_stmt_close($stmt);
             letter-spacing: .5px; color: var(--text-dim);
             border-bottom: 1px solid var(--border); background: var(--bg-card-2);
         }
-        .users-table td {
-            padding: 0; border-bottom: 1px solid var(--border); vertical-align: middle;
-        }
+        .users-table td { padding: 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
         .users-table tr:last-child td { border-bottom: none; }
         .users-table tr:hover td { background: rgba(255,255,255,.02); }
         .td-inner { display: flex; align-items: center; gap: 12px; padding: 12px 18px; }
@@ -212,9 +238,9 @@ mysqli_stmt_close($stmt);
             padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700;
             text-transform: uppercase; letter-spacing: .5px;
         }
-        .badge-admin  { background: rgba(240,168,48,.15); color: var(--warn); border: 1px solid rgba(240,168,48,.3); }
-        .badge-user   { background: var(--bg-card-2); color: var(--text-muted); border: 1px solid var(--border); }
-        .badge-danger { background: rgba(224,72,58,.15); color: var(--danger); border: 1px solid rgba(224,72,58,.3); }
+        .badge-admin     { background: rgba(240,168,48,.15); color: var(--warn);     border: 1px solid rgba(240,168,48,.3); }
+        .badge-protected { background: rgba(240,168,48,.28); color: var(--warn);     border: 1px solid rgba(240,168,48,.6); }
+        .badge-user      { background: var(--bg-card-2);     color: var(--text-muted); border: 1px solid var(--border); }
         /* ── Stats row ────────────────────────────────────────────────── */
         .stat-pills { display: flex; gap: 8px; flex-wrap: wrap; }
         .stat-pill {
@@ -233,21 +259,19 @@ mysqli_stmt_close($stmt);
         }
         .credits-form input[type=number]:focus { border-color: var(--accent); }
         /* ── Empty state ──────────────────────────────────────────────── */
-        .empty-state {
-            padding: 60px; text-align: center; color: var(--text-dim); font-size: 15px;
-        }
+        .empty-state { padding: 60px; text-align: center; color: var(--text-dim); font-size: 15px; }
         .empty-state svg { margin-bottom: 14px; opacity: .3; }
         /* ── Deleted at stamp ─────────────────────────────────────────── */
         .deleted-stamp { font-size: 11px; color: var(--danger); }
-        /* ── Alert ────────────────────────────────────────────────────── */
+        /* ── Flash messages ───────────────────────────────────────────── */
         .flash { padding: 13px 18px; border-radius: var(--radius); font-size: 14px; margin-bottom: 22px; }
-        .flash-success { background: rgba(60,184,120,.12); border: 1px solid rgba(60,184,120,.35); color: #a0f0c0; }
-        .flash-warn    { background: rgba(240,168,48,.12); border: 1px solid rgba(240,168,48,.35); color: #ffd580; }
-        .flash-error   { background: rgba(224,72,58,.12); border: 1px solid rgba(224,72,58,.35); color: #ffaaaa; }
-        /* ── Confirm modal ────────────────────────────────────────────── */
+        .flash-success { background: rgba(60,184,120,.12);  border: 1px solid rgba(60,184,120,.35); color: #a0f0c0; }
+        .flash-warn    { background: rgba(240,168,48,.12);  border: 1px solid rgba(240,168,48,.35); color: #ffd580; }
+        .flash-error   { background: rgba(224,72,58,.12);   border: 1px solid rgba(224,72,58,.35);  color: #ffaaaa; }
+        /* ── Confirm overlay ──────────────────────────────────────────── */
         #confirm-overlay {
             position: fixed; inset: 0; background: rgba(0,0,0,.72);
-            backdrop-filter: blur(4px); z-index: 300;
+            backdrop-filter: blur(4px); z-index: 400;
             display: flex; align-items: center; justify-content: center;
             opacity: 0; pointer-events: none; transition: opacity .2s;
         }
@@ -261,6 +285,38 @@ mysqli_stmt_close($stmt);
         #confirm-title { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--danger); margin-bottom: 10px; }
         #confirm-body  { font-size: 14px; color: var(--text-dim); margin-bottom: 24px; line-height: 1.6; }
         #confirm-footer { display: flex; gap: 10px; justify-content: flex-end; }
+        /* ── Edit user modal ──────────────────────────────────────────── */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,.72);
+            backdrop-filter: blur(4px); z-index: 300;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity .2s;
+        }
+        .modal-overlay.open { opacity: 1; pointer-events: all; }
+        .modal {
+            background: var(--bg-card-2); border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg); padding: 32px; width: 90%; max-width: 520px;
+            box-shadow: var(--shadow-lg); transform: scale(.95); transition: transform .2s;
+        }
+        .modal-overlay.open .modal { transform: scale(1); }
+        .modal-title  { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 22px; }
+        .modal-footer { display: flex; gap: 10px; margin-top: 24px; justify-content: flex-end; }
+        .field-group  { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+        .field-label  { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); }
+        .field-input  {
+            background: var(--bg-dark); border: 1px solid var(--border);
+            border-radius: var(--radius); color: var(--text);
+            font-family: var(--font-body); font-size: 14px;
+            padding: 9px 12px; outline: none; transition: border-color .2s; width: 100%; box-sizing: border-box;
+        }
+        .field-input:focus { border-color: var(--accent); }
+        /* ── Protected notice inline ──────────────────────────────────── */
+        .protected-notice {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 11px; font-weight: 700; color: var(--warn);
+            background: rgba(240,168,48,.08); border: 1px solid rgba(240,168,48,.25);
+            border-radius: var(--radius); padding: 5px 10px; white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -271,22 +327,40 @@ mysqli_stmt_close($stmt);
     <a href="admin_users.php?sub=manage" class="sub-nav-link <?= $sub === 'manage' ? 'active' : '' ?>">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
         Manage Users
-        <span class="sub-nav-badge"><?= count($sub === 'manage' ? $users : []) ?></span>
+        <span class="sub-nav-badge"><?= $count_manage ?></span>
+    </a>
+    <a href="admin_users.php?sub=admins" class="sub-nav-link <?= $sub === 'admins' ? 'active' : '' ?>">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7l-9-5zm0 4l5 2.8V12c0 3.42-2.42 6.63-5 7.74C9.42 18.63 7 15.42 7 12V8.8L12 6z"/></svg>
+        Manage Admins
+        <span class="sub-nav-badge"><?= $count_admins ?></span>
     </a>
     <a href="admin_users.php?sub=deleted" class="sub-nav-link <?= $sub === 'deleted' ? 'active' : '' ?>">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
         Undo Deleted
+        <?php if ($count_deleted > 0): ?>
+        <span class="sub-nav-badge"><?= $count_deleted ?></span>
+        <?php endif; ?>
     </a>
 </div>
 
 <div class="admin-page">
-    <?php if ($msg): ?>
-    <div class="flash flash-<?= htmlspecialchars($msg_type) ?>"><?= htmlspecialchars($msg) ?></div>
+
+    <?php if (isset($_SESSION['flash_admin_success'])): ?>
+        <div class="flash flash-success"><?= htmlspecialchars($_SESSION['flash_admin_success']); unset($_SESSION['flash_admin_success']); ?></div>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['flash_admin_error'])): ?>
+        <div class="flash flash-error"><?= htmlspecialchars($_SESSION['flash_admin_error']); unset($_SESSION['flash_admin_error']); ?></div>
     <?php endif; ?>
 
     <div class="page-header">
         <div class="page-title">
-            <?= $sub === 'deleted' ? 'Undo <span>Deleted</span> Accounts' : 'Manage <span>Users</span>' ?>
+            <?php if ($sub === 'deleted'): ?>
+                Undo <span>Deleted</span> Accounts
+            <?php elseif ($sub === 'admins'): ?>
+                Manage <span>Admins</span>
+            <?php else: ?>
+                Manage <span>Users</span>
+            <?php endif; ?>
         </div>
         <div class="search-bar">
             <form method="GET" action="admin_users.php" style="display:flex;gap:8px;">
@@ -300,8 +374,13 @@ mysqli_stmt_close($stmt);
 
     <?php if ($sub === 'deleted'): ?>
     <p style="color:var(--text-dim);font-size:14px;margin-bottom:20px;">
-        Deleted accounts are preserved in full — inventory items, market listings (paused), and all offers (sent/received) remain intact. 
-        Restoring an account re-activates it immediately. Offers that were declined or completed while the account was deleted remain in that final state.
+        Deleted accounts are preserved in full — inventory items, market listings (paused), and all offers (sent/received) remain intact.
+        Restoring an account re-activates it immediately.
+    </p>
+    <?php elseif ($sub === 'admins'): ?>
+    <p style="color:var(--text-dim);font-size:14px;margin-bottom:20px;">
+        These accounts have admin privileges. You can edit their details or revoke admin access, moving them back to regular users.
+        The <strong style="color:var(--warn);">admin@gearup.com</strong> account is permanently protected and cannot be demoted.
     </p>
     <?php endif; ?>
 
@@ -309,7 +388,11 @@ mysqli_stmt_close($stmt);
         <?php if (empty($users)): ?>
         <div class="empty-state">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-            <div><?= $sub === 'deleted' ? 'No deleted accounts found.' : 'No users found.' ?></div>
+            <div>
+                <?php if ($sub === 'deleted'): ?>No deleted accounts found.
+                <?php elseif ($sub === 'admins'): ?>No admin accounts found.
+                <?php else: ?>No users found.<?php endif; ?>
+            </div>
         </div>
         <?php else: ?>
         <table class="users-table">
@@ -318,15 +401,15 @@ mysqli_stmt_close($stmt);
                     <th>User</th>
                     <th>Role</th>
                     <th>Data Snapshot</th>
-                    <th>Credits</th>
-                    <?php if ($sub === 'deleted'): ?>
-                    <th>Deleted At</th>
-                    <?php endif; ?>
+                    <?php if ($sub !== 'admins'): ?><th>Credits</th><?php endif; ?>
+                    <?php if ($sub === 'deleted'): ?><th>Deleted At</th><?php endif; ?>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
-            <?php foreach ($users as $u): ?>
+            <?php foreach ($users as $u):
+                $is_protected = strtolower($u['email']) === 'admin@gearup.com';
+            ?>
             <tr>
                 <!-- User info -->
                 <td>
@@ -350,6 +433,11 @@ mysqli_stmt_close($stmt);
                     <div class="td-inner">
                         <?php if ($u['id'] == $me): ?>
                             <span class="badge badge-admin">You</span>
+                        <?php elseif ($is_protected): ?>
+                            <span class="badge badge-protected">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7l-9-5z"/></svg>
+                                Super Admin
+                            </span>
                         <?php elseif ($u['is_admin']): ?>
                             <span class="badge badge-admin">Admin</span>
                         <?php else: ?>
@@ -367,17 +455,17 @@ mysqli_stmt_close($stmt);
                         </div>
                     </div>
                 </td>
-                <!-- Credits -->
+                <!-- Credits — hidden entirely on admins tab -->
+                <?php if ($sub !== 'admins'): ?>
                 <td>
                     <div class="td-inner">
                         <?php if ($sub !== 'deleted'): ?>
                         <form method="POST" action="admin_users.php?sub=manage" class="credits-form">
-                            <input type="hidden" name="action" value="update_credits">
+                            <input type="hidden" name="action"  value="update_credits">
                             <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
                             <span style="color:var(--accent);font-weight:700;font-size:13px;">$</span>
                             <input type="number" name="credits" step="0.01" min="0"
-                                   value="<?= number_format($u['credits'], 2, '.', '') ?>"
-                                   title="Edit credits">
+                                   value="<?= number_format($u['credits'], 2, '.', '') ?>" title="Edit credits">
                             <button type="submit" class="btn btn-accent btn-sm" title="Save">✓</button>
                         </form>
                         <?php else: ?>
@@ -385,6 +473,7 @@ mysqli_stmt_close($stmt);
                         <?php endif; ?>
                     </div>
                 </td>
+                <?php endif; ?>
                 <!-- Deleted at (only for deleted sub) -->
                 <?php if ($sub === 'deleted'): ?>
                 <td>
@@ -396,26 +485,49 @@ mysqli_stmt_close($stmt);
                 <!-- Actions -->
                 <td>
                     <div class="td-inner action-group">
+
                         <?php if ($sub === 'deleted'): ?>
-                            <!-- Restore button -->
+                            <!-- Restore -->
                             <form method="POST" action="admin_users.php?sub=deleted">
-                                <input type="hidden" name="action" value="restore_user">
+                                <input type="hidden" name="action"  value="restore_user">
                                 <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
                                 <button type="submit" class="btn btn-success btn-sm">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.5"/></svg>
                                     Restore
                                 </button>
                             </form>
-                        <?php else: ?>
-                            <?php if ($u['id'] != $me): ?>
-                            <!-- Toggle admin -->
-                            <form method="POST" action="admin_users.php?sub=manage">
-                                <input type="hidden" name="action" value="toggle_admin">
+
+                        <?php elseif ($sub === 'admins'): ?>
+                            <!-- Edit admin (modal, credits + admin checkbox hidden) -->
+                            <button class="btn btn-ghost btn-sm"
+                                    onclick='openEditModal(<?= json_encode($u, JSON_HEX_APOS | JSON_HEX_QUOT) ?>, true)'>
+                                Edit
+                            </button>
+                            <?php if ($u['id'] != $me && !$is_protected): ?>
+                            <!-- Revoke admin -->
+                            <form method="POST" action="admin_users.php?sub=admins" style="display:inline;">
+                                <input type="hidden" name="action"  value="toggle_admin">
                                 <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
-                                <button type="submit" class="btn btn-ghost btn-sm" title="<?= $u['is_admin'] ? 'Revoke Admin' : 'Make Admin' ?>">
-                                    <?= $u['is_admin'] ? 'Revoke Admin' : 'Make Admin' ?>
+                                <button type="submit" class="btn btn-warn btn-sm"
+                                        onclick="return confirm('Remove admin privileges from <?= htmlspecialchars(addslashes($u['name'])) ?>? They will be moved to Manage Users.')">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7l-9-5z"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+                                    Revoke Admin
                                 </button>
                             </form>
+                            <?php elseif ($is_protected): ?>
+                            <span class="protected-notice">
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7l-9-5z"/></svg>
+                                Protected
+                            </span>
+                            <?php endif; ?>
+
+                        <?php else: ?>
+                            <!-- Edit user (full modal) -->
+                            <button class="btn btn-ghost btn-sm"
+                                    onclick='openEditModal(<?= json_encode($u, JSON_HEX_APOS | JSON_HEX_QUOT) ?>, false)'>
+                                Edit
+                            </button>
+                            <?php if ($u['id'] != $me): ?>
                             <!-- Delete -->
                             <button class="btn btn-danger btn-sm"
                                     onclick="confirmDelete(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['name'])) ?>')">
@@ -424,6 +536,7 @@ mysqli_stmt_close($stmt);
                             </button>
                             <?php endif; ?>
                         <?php endif; ?>
+
                     </div>
                 </td>
             </tr>
@@ -434,26 +547,89 @@ mysqli_stmt_close($stmt);
     </div>
 </div>
 
-<!-- Confirm delete modal -->
+<!-- ── Edit User / Admin Modal ────────────────────────────────────────────── -->
+<div class="modal-overlay" id="editUserModal">
+    <div class="modal">
+        <div class="modal-title" id="editModalTitle">Edit User</div>
+        <form method="POST" action="admin_users.php?sub=<?= htmlspecialchars($sub) ?>">
+            <input type="hidden" name="action"  value="edit_user">
+            <input type="hidden" name="user_id" id="editUserId">
+            <div class="field-group">
+                <label class="field-label">Username</label>
+                <input type="text" name="username" id="editUsername" class="field-input" required>
+            </div>
+            <div class="field-group">
+                <label class="field-label">Email</label>
+                <input type="email" name="email" id="editEmail" class="field-input" required>
+            </div>
+            <!-- Credits: hidden when editing from Admins tab -->
+            <div class="field-group" id="editCreditsGroup">
+                <label class="field-label">Credits</label>
+                <input type="number" step="0.01" name="credits" id="editCredits" class="field-input">
+            </div>
+            <!-- Admin checkbox: hidden when editing from Admins tab (always admin) -->
+            <div class="field-group" id="editAdminGroup" style="flex-direction:row;align-items:center;gap:10px;">
+                <input type="checkbox" name="is_admin" id="editIsAdmin" value="1"
+                       style="width:16px;height:16px;accent-color:var(--accent);">
+                <label class="field-label" style="margin:0;">Grant Admin Privileges</label>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
+                <button type="submit" class="btn btn-accent">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ── Soft-delete confirm overlay ───────────────────────────────────────── -->
 <div id="confirm-overlay">
     <div id="confirm-box">
         <div id="confirm-title">⚠ Delete User Account</div>
         <div id="confirm-body">
             You are about to <strong>soft-delete</strong> the account of <strong id="confirm-name"></strong>.<br><br>
-            Their inventory, listings (paused), and all offers (sent &amp; received) will be <em>preserved</em> and can be fully restored later from the <strong>Undo Deleted</strong> tab.
+            Their inventory, listings (paused), and all offer history will be <em>fully preserved</em>
+            and can be restored from the <strong>Undo Deleted</strong> tab at any time.
         </div>
         <div id="confirm-footer">
             <button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button>
             <form id="delete-form" method="POST" action="admin_users.php?sub=manage">
-                <input type="hidden" name="action" value="delete_user">
+                <input type="hidden" name="action"  value="delete_user">
                 <input type="hidden" name="user_id" id="delete-uid">
-                <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                <button type="submit" class="btn btn-danger">Yes, Soft-Delete</button>
             </form>
         </div>
     </div>
 </div>
 
 <script>
+// ── Edit User / Admin modal ────────────────────────────────────────────────
+function openEditModal(u, isAdminTab) {
+    document.getElementById('editUserId').value    = u.id;
+    document.getElementById('editUsername').value  = u.name;
+    document.getElementById('editEmail').value     = u.email;
+    document.getElementById('editCredits').value   = u.credits;
+    document.getElementById('editIsAdmin').checked = u.is_admin == 1;
+    document.getElementById('editModalTitle').textContent = isAdminTab ? 'Edit Admin' : 'Edit User';
+
+    // On the Admins tab: hide credits and the admin checkbox (they're already admin)
+    const creditsGroup = document.getElementById('editCreditsGroup');
+    const adminGroup   = document.getElementById('editAdminGroup');
+    creditsGroup.style.display = isAdminTab ? 'none' : '';
+    adminGroup.style.display   = isAdminTab ? 'none' : '';
+
+    // Ensure is_admin stays checked when saving from Admins tab
+    if (isAdminTab) { document.getElementById('editIsAdmin').checked = true; }
+
+    document.getElementById('editUserModal').classList.add('open');
+}
+function closeEditModal() {
+    document.getElementById('editUserModal').classList.remove('open');
+}
+document.getElementById('editUserModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+});
+
+// ── Soft-delete confirm ────────────────────────────────────────────────────
 function confirmDelete(uid, name) {
     document.getElementById('confirm-name').textContent = name;
     document.getElementById('delete-uid').value = uid;

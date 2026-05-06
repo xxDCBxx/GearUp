@@ -16,12 +16,23 @@ if (!$admin_flag) { header("location: home.php"); exit; }
 
 $active_page = 'admin_records';
 
+// ── Game info helper (logo images, consistent with rest of admin) ──────────
+function rec_game_info(string $game): array {
+    return match(strtolower($game)) {
+        'cs2'   => ['name' => 'CS2',             'logo' => 'logos/logo_cs2.png',   'color' => '#4a9fd4'],
+        'dota2' => ['name' => 'Dota 2',          'logo' => 'logos/logo_dota2.png', 'color' => '#e05050'],
+        'rust'  => ['name' => 'Rust',            'logo' => 'logos/logo_rust.webp', 'color' => '#c18444'],
+        'tf2'   => ['name' => 'Team Fortress 2', 'logo' => 'logos/logo_tf2.png',   'color' => '#cf6a32'],
+        default => ['name' => '',                'logo' => '',                      'color' => '']
+    };
+}
+
 // ── Filters ────────────────────────────────────────────────────────────────
-$page_num  = max(1, intval($_GET['p'] ?? 1));
-$per_page  = 20;
-$offset    = ($page_num - 1) * $per_page;
-$search    = trim($_GET['q'] ?? '');
-$type_f    = $_GET['type'] ?? '';   // sale | offer | credit
+$page_num = max(1, intval($_GET['p'] ?? 1));
+$per_page = 20;
+$offset   = ($page_num - 1) * $per_page;
+$search   = trim($_GET['q'] ?? '');
+$type_f   = $_GET['type'] ?? '';   // sale | offer | credit
 
 // ── Total count ────────────────────────────────────────────────────────────
 $where  = "WHERE 1=1";
@@ -80,16 +91,6 @@ $records = [];
 $res = mysqli_stmt_get_result($stmt);
 while ($row = mysqli_fetch_assoc($res)) { $records[] = $row; }
 mysqli_stmt_close($stmt);
-
-function game_badge(string $game): string {
-    return match(strtolower($game)) {
-        'cs2'   => '<span style="color:#4a9fd4;font-size:10px;font-weight:700;">CS2</span>',
-        'dota2' => '<span style="color:#e05050;font-size:10px;font-weight:700;">DOTA2</span>',
-        'rust'  => '<span style="color:#c18444;font-size:10px;font-weight:700;">RUST</span>',
-        'tf2'   => '<span style="color:#cf6a32;font-size:10px;font-weight:700;">TF2</span>',
-        default => ''
-    };
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -106,6 +107,11 @@ function game_badge(string $game): string {
         }
         .page-title { font-family: var(--font-display); font-size: 26px; font-weight: 700; color: #fff; }
         .page-title span { color: var(--accent); }
+
+        /* flash */
+        .flash { padding: 13px 18px; border-radius: var(--radius); font-size: 14px; margin-bottom: 22px; }
+        .flash-success { background: rgba(60,184,120,.12);  border: 1px solid rgba(60,184,120,.35); color: #a0f0c0; }
+        .flash-error   { background: rgba(224,72,58,.12);   border: 1px solid rgba(224,72,58,.35);  color: #ffaaaa; }
 
         /* toolbar */
         .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -145,15 +151,20 @@ function game_badge(string $game): string {
             padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
             text-transform: uppercase; letter-spacing: .5px;
         }
-        .chip-sale   { background: rgba(74,159,212,.15); color: var(--accent); border: 1px solid rgba(74,159,212,.3); }
+        .chip-sale   { background: rgba(74,159,212,.15); color: var(--accent);  border: 1px solid rgba(74,159,212,.3); }
         .chip-offer  { background: rgba(60,184,120,.15); color: var(--success); border: 1px solid rgba(60,184,120,.3); }
-        .chip-credit { background: rgba(240,168,48,.15); color: var(--warn); border: 1px solid rgba(240,168,48,.3); }
+        .chip-credit { background: rgba(240,168,48,.15); color: var(--warn);    border: 1px solid rgba(240,168,48,.3); }
 
         /* item thumb */
         .item-thumb { display: flex; align-items: center; gap: 10px; }
-        .item-thumb img { width: 44px; height: 34px; object-fit: contain; }
-        .item-thumb-info { }
+        .item-thumb img.item-img { width: 44px; height: 34px; object-fit: contain; }
         .item-thumb-name { font-family: var(--font-display); font-size: 14px; font-weight: 600; color: var(--text); }
+        .game-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            margin-top: 2px;
+        }
+        .game-badge img { width: 13px; height: 13px; object-fit: contain; }
+        .game-badge span { font-size: 10px; font-weight: 700; }
 
         /* amount */
         .amount-val { font-family: var(--font-display); font-size: 15px; font-weight: 700; color: var(--accent); }
@@ -162,9 +173,7 @@ function game_badge(string $game): string {
         .pager { display: flex; align-items: center; gap: 8px; padding: 18px 16px; justify-content: flex-end; }
         .pager-info { font-size: 13px; color: var(--text-muted); margin-right: 8px; }
 
-        .empty-state {
-            padding: 60px; text-align: center; color: var(--text-dim); font-size: 15px;
-        }
+        .empty-state { padding: 60px; text-align: center; color: var(--text-dim); font-size: 15px; }
         .empty-state svg { display: block; margin: 0 auto 14px; opacity: .3; }
 
         .notes-cell { font-size: 12px; color: var(--text-dim); max-width: 200px; }
@@ -174,6 +183,14 @@ function game_badge(string $game): string {
 <?php include 'nav.php'; ?>
 
 <div class="admin-page">
+
+    <?php if (isset($_SESSION['flash_admin_success'])): ?>
+        <div class="flash flash-success"><?= htmlspecialchars($_SESSION['flash_admin_success']); unset($_SESSION['flash_admin_success']); ?></div>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['flash_admin_error'])): ?>
+        <div class="flash flash-error"><?= htmlspecialchars($_SESSION['flash_admin_error']); unset($_SESSION['flash_admin_error']); ?></div>
+    <?php endif; ?>
+
     <div class="page-header">
         <div class="page-title">Transaction <span>Records</span></div>
         <form method="GET" action="admin_records.php" class="toolbar">
@@ -229,13 +246,21 @@ function game_badge(string $game): string {
                 <td>
                     <div class="td-p">
                         <?php if ($r['item_name']): ?>
+                        <?php $gi = rec_game_info($r['game'] ?? ''); ?>
                         <div class="item-thumb">
                             <?php if ($r['item_image']): ?>
-                            <img src="<?= htmlspecialchars($r['item_image']) ?>" alt="" onerror="this.style.display='none'">
+                            <img class="item-img" src="<?= htmlspecialchars($r['item_image']) ?>" alt="" onerror="this.style.display='none'">
                             <?php endif; ?>
-                            <div class="item-thumb-info">
+                            <div>
                                 <div class="item-thumb-name"><?= htmlspecialchars($r['item_name']) ?></div>
-                                <?= game_badge($r['game'] ?? '') ?>
+                                <?php if ($gi['name']): ?>
+                                <div class="game-badge">
+                                    <?php if ($gi['logo']): ?>
+                                    <img src="<?= htmlspecialchars($gi['logo']) ?>" alt="" onerror="this.style.display='none'">
+                                    <?php endif; ?>
+                                    <span style="color:<?= $gi['color'] ?>;"><?= htmlspecialchars($gi['name']) ?></span>
+                                </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <?php else: ?>
