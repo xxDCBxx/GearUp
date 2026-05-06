@@ -232,6 +232,7 @@ function eyeIconSvg(){
         .password-field-wrapper input {
             width: 100%;
             padding-right: 42px;
+            padding-left: 42px;
             box-sizing: border-box;
         }
         .toggle-password {
