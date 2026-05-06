@@ -80,6 +80,7 @@ body {
     border: 1px solid #28557b;
     border-radius: 4px;
     padding: 14px;
+    text-align: center;
 }
 
 .register-panel .btn-register {
@@ -227,6 +228,7 @@ input::placeholder {
 .password-field-wrapper input {
     width: 100%;
     padding-right: 45px;
+    padding-left: 45px;
 }
 
 .toggle-password {
