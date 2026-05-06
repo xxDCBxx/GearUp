@@ -7,7 +7,7 @@ if (!isset($_SESSION["loggedin"]) || $_SESSION["loggedin"] !== true) {
 }
 $me = $_SESSION["id"];
 $chk = mysqli_prepare($link, "SELECT is_admin FROM users WHERE id = ?");
-if (!$chk) { die("DB error (admin check): " . mysqli_error($link)); }
+if (!$chk) { die("DB error: " . mysqli_error($link)); }
 mysqli_stmt_bind_param($chk, "i", $me);
 mysqli_stmt_execute($chk);
 mysqli_stmt_bind_result($chk, $admin_flag);
@@ -16,9 +16,8 @@ mysqli_stmt_close($chk);
 if (!$admin_flag) { header("location: home.php"); exit; }
 
 $active_page = 'admin_requests';
-$sub = $_GET['sub'] ?? 'revert';   // 'revert' | 'deletion'
+$sub = $_GET['sub'] ?? 'revert';
 
-// ── Game info helper ───────────────────────────────────────────────────────
 function req_game_info(string $game): array {
     return match($game) {
         'cs2'   => ['name' => 'CS2',             'logo' => 'logos/logo_cs2.png'],
@@ -29,25 +28,22 @@ function req_game_info(string $game): array {
     };
 }
 
-// ── Handle POST actions ────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action     = $_POST['action']     ?? '';
     $request_id = intval($_POST['request_id'] ?? 0);
-    $type       = $_POST['req_type']   ?? 'revert';   // 'revert' | 'deletion'
+    $type       = $_POST['req_type']   ?? 'revert';
 
     if ($request_id) {
 
-        // ── Revert requests ────────────────────────────────────────────────
         if ($type === 'revert') {
 
             if ($action === 'approve') {
-                $tx_type = $_POST['tx_type']     ?? '';   // 'market' | 'trade'
+                $tx_type = $_POST['tx_type']     ?? '';
                 $ref_id  = intval($_POST['reference_id'] ?? 0);
 
                 mysqli_begin_transaction($link);
                 try {
                     if ($tx_type === 'market') {
-                        // Fetch original market history record
                         $stmt = mysqli_prepare($link,
                             "SELECT buyer_id, seller_id, item_id, price
                              FROM market_history WHERE id = ?");
@@ -58,7 +54,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         if (!$trade) throw new Exception("Market history record not found.");
 
-                        // Check buyer still holds the item
                         $check = mysqli_query($link,
                             "SELECT id FROM user_items
                              WHERE user_id = {$trade['buyer_id']}
@@ -66,12 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                              LIMIT 1");
                         if (mysqli_num_rows($check) == 0) {
                             throw new Exception(
-                                "Revert blocked: the buyer no longer has the received item. " .
-                                "It may have been traded or sold.");
+                                "Revert blocked: the buyer no longer has the received item."
+                            );
                         }
                         $ui_row = mysqli_fetch_assoc($check);
 
-                        // Move item back to seller, refund buyer, debit seller
                         mysqli_query($link,
                             "UPDATE user_items SET user_id = {$trade['seller_id']}
                              WHERE id = {$ui_row['id']}");
@@ -96,7 +90,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $u1_items = array_filter(array_map('intval', explode(',', $trade['user1_items'])));
                         $u2_items = array_filter(array_map('intval', explode(',', $trade['user2_items'])));
 
-                        // Verify all items are still with their current holders
                         foreach ($u1_items as $item_id) {
                             $chk = mysqli_query($link,
                                 "SELECT id FROM user_items
@@ -112,7 +105,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 throw new Exception("Revert blocked: user1 no longer has item #$item_id.");
                         }
 
-                        // Swap items back
                         foreach ($u1_items as $item_id) {
                             mysqli_query($link,
                                 "UPDATE user_items SET user_id = {$trade['user1_id']}
@@ -147,7 +139,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // ── Deletion requests ──────────────────────────────────────────────
         elseif ($type === 'deletion') {
 
             if ($action === 'approve') {
@@ -179,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         mysqli_commit($link);
                         $_SESSION['flash_admin_success'] =
-                            "Account soft-deleted. Data preserved — restorable from the Users page.";
+                            "Account soft-deleted. Data preserved.";
                     } catch (Exception $e) {
                         mysqli_rollback($link);
                         $_SESSION['flash_admin_error'] = "Failed to delete user: " . $e->getMessage();
@@ -194,13 +185,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['flash_admin_success'] = "Deletion request rejected. Account kept active.";
             }
         }
+
+        elseif ($type === 'topup') {
+            if ($action === 'approve') {
+                $rs = mysqli_prepare($link, "SELECT user_id, amount FROM topup_requests WHERE id = ? AND status = 'pending' AND email_verified = 1");
+                mysqli_stmt_bind_param($rs, "i", $request_id);
+                mysqli_stmt_execute($rs);
+                $req = mysqli_fetch_assoc(mysqli_stmt_get_result($rs));
+                mysqli_stmt_close($rs);
+
+                if ($req) {
+                    $uid = $req['user_id'];
+                    $amount = $req['amount'];
+                    mysqli_begin_transaction($link);
+                    try {
+                        mysqli_query($link, "UPDATE users SET credits = credits + $amount WHERE id = $uid");
+                        mysqli_query($link, "UPDATE topup_requests SET status = 'approved', reviewed_by = $me, reviewed_at = NOW() WHERE id = $request_id");
+                        mysqli_commit($link);
+                        $_SESSION['flash_admin_success'] = "Top-up request approved. Balance updated.";
+                    } catch (Exception $e) {
+                        mysqli_rollback($link);
+                        $_SESSION['flash_admin_error'] = "Failed to approve top-up: " . $e->getMessage();
+                    }
+                }
+            } elseif ($action === 'deny') {
+                mysqli_query($link, "UPDATE topup_requests SET status = 'denied', reviewed_by = $me, reviewed_at = NOW() WHERE id = $request_id");
+                $_SESSION['flash_admin_success'] = "Top-up request denied.";
+            }
+        }
     }
 
     header("Location: admin_requests.php?sub=$sub");
     exit;
 }
 
-// ── Fetch requests ─────────────────────────────────────────────────────────
 $requests = [];
 if ($sub === 'deletion') {
     $sql = "SELECT dr.id, dr.reason, dr.status, dr.created_at, dr.reviewed_at,
@@ -210,6 +228,15 @@ if ($sub === 'deletion') {
             JOIN users u  ON dr.user_id    = u.id
             LEFT JOIN users a ON dr.reviewed_by = a.id
             ORDER BY FIELD(dr.status,'pending','approved','denied'), dr.created_at DESC";
+} elseif ($sub === 'topup') {
+    $sql = "SELECT t.id, t.amount, t.status, t.created_at, t.reviewed_at,
+                   u.id AS user_id, u.name AS user_name, u.email AS user_email, u.picture,
+                   a.name AS reviewed_by_name
+            FROM topup_requests t
+            JOIN users u ON t.user_id = u.id
+            LEFT JOIN users a ON t.reviewed_by = a.id
+            WHERE t.email_verified = 1
+            ORDER BY FIELD(t.status,'pending','approved','denied'), t.created_at DESC";
 } else {
     $sql = "SELECT rr.id, rr.type, rr.reference_id, rr.reason, rr.amount, rr.status,
                    rr.created_at, rr.reviewed_at,
@@ -221,13 +248,12 @@ if ($sub === 'deletion') {
             ORDER BY FIELD(rr.status,'pending','approved','rejected'), rr.created_at DESC";
 }
 $stmt = mysqli_prepare($link, $sql);
-if (!$stmt) { die("DB error (fetch): " . mysqli_error($link)); }
+if (!$stmt) { die("DB error: " . mysqli_error($link)); }
 mysqli_stmt_execute($stmt);
 $res = mysqli_stmt_get_result($stmt);
 while ($row = mysqli_fetch_assoc($res)) { $requests[] = $row; }
 mysqli_stmt_close($stmt);
 
-// ── Enrich revert requests with full transaction data (for modal + blocked check) ──
 if ($sub === 'revert') {
     foreach ($requests as &$r) {
         $tdata = ['type' => $r['type']];
@@ -327,11 +353,12 @@ if ($sub === 'revert') {
     unset($r);
 }
 
-// Pending counts for sub-nav badges
-$pc = mysqli_query($link, "SELECT COUNT(*) FROM revert_requests   WHERE status='pending'");
-$pending_revert   = mysqli_fetch_row($pc)[0];
+$pc = mysqli_query($link, "SELECT COUNT(*) FROM revert_requests WHERE status='pending'");
+$pending_revert = mysqli_fetch_row($pc)[0];
 $dc = mysqli_query($link, "SELECT COUNT(*) FROM deletion_requests WHERE status='pending'");
 $pending_deletion = mysqli_fetch_row($dc)[0];
+$tc = mysqli_query($link, "SELECT COUNT(*) FROM topup_requests WHERE status='pending' AND email_verified=1");
+$pending_topup = mysqli_fetch_row($tc)[0];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -360,19 +387,14 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
             padding: 1px 7px; color: var(--text-muted);
         }
         .sub-nav-badge.has-pending { background: rgba(224,72,58,.2); border-color: rgba(224,72,58,.4); color: var(--danger); }
-
         .admin-page { padding: 32px 40px; max-width: 1200px; margin: 0 auto; }
         .page-header { display: flex; align-items: center; margin-bottom: 28px; }
         .page-title { font-family: var(--font-display); font-size: 26px; font-weight: 700; color: #fff; }
         .page-title span { color: var(--accent); }
-
-        /* ── Flash messages ───────────────────────────────────────────────── */
         .flash { padding: 13px 18px; border-radius: var(--radius); font-size: 14px; margin-bottom: 22px; }
         .flash-success { background: rgba(60,184,120,.12);  border: 1px solid rgba(60,184,120,.35); color: #a0f0c0; }
         .flash-warn    { background: rgba(240,168,48,.12);  border: 1px solid rgba(240,168,48,.35); color: #ffd580; }
         .flash-error   { background: rgba(224,72,58,.12);   border: 1px solid rgba(224,72,58,.35);  color: #ffaaaa; }
-
-        /* ── Revert request cards ─────────────────────────────────────────── */
         .req-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 32px; }
         .req-card {
             background: var(--bg-card); border: 1px solid var(--border);
@@ -394,8 +416,6 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
             font-size: 13px; color: var(--text-dim); line-height: 1.6; margin-bottom: 14px;
         }
         .req-actions { display: flex; gap: 10px; justify-content: flex-end; }
-
-        /* type chip — clickable to open modal */
         .type-chip {
             display: inline-flex; align-items: center; gap: 5px;
             padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
@@ -405,15 +425,11 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
         .type-chip:hover { filter: brightness(1.2); }
         .chip-market { background: rgba(74,159,212,.15); color: var(--accent);  border: 1px solid rgba(74,159,212,.3); }
         .chip-trade  { background: rgba(60,184,120,.15); color: var(--success); border: 1px solid rgba(60,184,120,.3); }
-
-        /* warn strip */
         .warn-strip {
             background: rgba(224,72,58,.1); border: 1px solid rgba(224,72,58,.3);
             border-radius: var(--radius); padding: 9px 14px; font-size: 12px;
             color: #ffaaaa; margin-bottom: 12px;
         }
-
-        /* ── Deletion request table ───────────────────────────────────────── */
         .table-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
         .req-table { width: 100%; border-collapse: collapse; }
         .req-table th {
@@ -425,7 +441,6 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
         .req-table td { padding: 14px 18px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 14px; }
         .req-table tr:last-child td { border-bottom: none; }
         .req-table tr:hover td { background: rgba(255,255,255,.02); }
-
         .status-chip {
             display: inline-flex; align-items: center; padding: 3px 10px;
             border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
@@ -433,16 +448,12 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
         .chip-pending  { background: rgba(240,168,48,.15); color: var(--warn);    border: 1px solid rgba(240,168,48,.3); }
         .chip-approved { background: rgba(60,184,120,.15); color: var(--success); border: 1px solid rgba(60,184,120,.3); }
         .chip-denied   { background: rgba(224,72,58,.15);  color: var(--danger);  border: 1px solid rgba(224,72,58,.3); }
-
         .action-group { display: flex; gap: 6px; }
         .reason-cell  { font-size: 13px; color: var(--text-dim); max-width: 220px; }
         .user-line    { font-weight: 600; color: var(--text); }
         .user-sub     { font-size: 11px; color: var(--text-muted); }
-
         .empty-state { padding: 60px; text-align: center; color: var(--text-dim); font-size: 15px; }
         .empty-state svg { display: block; margin: 0 auto 14px; opacity: .3; }
-
-        /* ── Transaction detail modal ─────────────────────────────────────── */
         .modal-overlay {
             position: fixed; inset: 0; background: rgba(0,0,0,.72);
             backdrop-filter: blur(4px); z-index: 300;
@@ -459,7 +470,6 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
         .modal-overlay.open .modal { transform: scale(1); }
         .modal-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 22px; }
         .modal-footer { display: flex; gap: 10px; margin-top: 24px; justify-content: flex-end; }
-
         .tx-item-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         .tx-item-box {
             background: var(--bg-card); border: 1px dashed var(--border-light);
@@ -469,8 +479,6 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
         .tx-item-name { font-family: var(--font-display); font-size: 13px; font-weight: 600; color: var(--text); }
         .tx-item-meta { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
         .tx-blocked-item { border-color: var(--danger); background: rgba(224,72,58,.06); }
-
-        /* ── Deletion req card ────────────────────────────────────────────── */
         .del-card {
             background: var(--bg-card); border: 1px solid var(--border);
             border-radius: var(--radius-lg); overflow: hidden; border-left: 4px solid var(--accent);
@@ -504,6 +512,10 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
         Deletion Requests
         <span class="sub-nav-badge <?= $pending_deletion > 0 ? 'has-pending' : '' ?>"><?= $pending_deletion ?> pending</span>
     </a>
+    <a href="admin_requests.php?sub=topup" class="sub-nav-link <?= $sub === 'topup' ? 'active' : '' ?>">
+        Top-up Requests
+        <span class="sub-nav-badge <?= $pending_topup > 0 ? 'has-pending' : '' ?>"><?= $pending_topup ?> pending</span>
+    </a>
 </div>
 
 <div class="admin-page">
@@ -517,13 +529,16 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
 
     <div class="page-header">
         <div class="page-title">
-            <?= $sub === 'deletion' ? 'Deletion <span>Requests</span>' : 'Revert <span>Requests</span>' ?>
+            <?php if ($sub === 'deletion'): ?>
+                Deletion <span>Requests</span>
+            <?php elseif ($sub === 'topup'): ?>
+                Top-up <span>Requests</span>
+            <?php else: ?>
+                Revert <span>Requests</span>
+            <?php endif; ?>
         </div>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!-- Revert Requests                                                      -->
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
     <?php if ($sub === 'revert'): ?>
 
         <?php if (empty($requests)): ?>
@@ -543,10 +558,10 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
             $block_reason = '';
             if ($type === 'market' && isset($td['buyer_has_item']) && !$td['buyer_has_item']) {
                 $blocked      = true;
-                $block_reason = 'The buyer no longer has the received item — it may have been re-traded or sold.';
+                $block_reason = 'The buyer no longer has the received item.';
             } elseif ($type === 'trade' && isset($td['can_revert']) && !$td['can_revert']) {
                 $blocked      = true;
-                $block_reason = 'One or more items from this trade have been moved — full revert is no longer possible.';
+                $block_reason = 'One or more items from this trade have been moved.';
             }
             $is_pending = ($r['status'] === 'pending');
         ?>
@@ -564,7 +579,6 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
                         <?php endif; ?>
                     </div>
                 </div>
-                <!-- Type chip opens the detail modal -->
                 <?php if ($is_pending): ?>
                 <button class="type-chip <?= $type === 'market' ? 'chip-market' : 'chip-trade' ?>"
                         onclick='openTxModal(<?= json_encode($td, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
@@ -577,7 +591,6 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
                 </span>
                 <?php endif; ?>
 
-                <!-- Status chip for reviewed requests -->
                 <?php if (!$is_pending):
                     $sc = match($r['status']) { 'approved' => 'chip-approved', default => 'chip-denied' };
                 ?>
@@ -627,14 +640,69 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
         </div>
         <?php endif; ?>
 
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
-    <!-- Deletion Requests                                                    -->
-    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <?php elseif ($sub === 'topup'): ?>
+
+        <?php if (empty($requests)): ?>
+        <div class="table-card">
+            <div class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10z"/></svg>
+                No top-up requests found.
+            </div>
+        </div>
+        <?php else: ?>
+        <?php foreach ($requests as $t):
+            $is_pending = ($t['status'] === 'pending');
+        ?>
+        <div class="del-card">
+            <div class="del-head">
+                <div class="del-head-info">
+                    <div class="del-head-user">
+                        <?php if (!empty($t['picture'])): ?>
+                            <img src="<?= htmlspecialchars($t['picture']) ?>" class="u-avatar" alt="" style="vertical-align:middle;margin-right:8px;">
+                        <?php endif; ?>
+                        <?= htmlspecialchars($t['user_name']) ?>
+                        <span style="font-size:12px;color:var(--text-muted);">ID #<?= $t['user_id'] ?></span>
+                    </div>
+                    <div class="del-head-sub">
+                        Request #<?= $t['id'] ?> · <?= htmlspecialchars($t['user_email']) ?> · Submitted <?= date('M j, Y g:i A', strtotime($t['created_at'])) ?>
+                        <?php if (!empty($t['reviewed_by_name'])): ?>
+                            · Reviewed by <?= htmlspecialchars($t['reviewed_by_name']) ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php if (!$is_pending):
+                    $sc = match($t['status']) { 'approved' => 'chip-approved', default => 'chip-denied' };
+                ?>
+                <span class="status-chip <?= $sc ?>"><?= ucfirst($t['status']) ?></span>
+                <?php endif; ?>
+            </div>
+            <div class="del-body">
+                <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">
+                    Requested Amount: <strong style="color:var(--accent);font-size:16px;">$<?= number_format($t['amount'], 2) ?></strong>
+                </div>
+                <?php if ($is_pending): ?>
+                <div class="req-actions">
+                    <form method="POST" action="admin_requests.php?sub=topup">
+                        <input type="hidden" name="action"     value="deny">
+                        <input type="hidden" name="request_id" value="<?= $t['id'] ?>">
+                        <input type="hidden" name="req_type"   value="topup">
+                        <button type="submit" class="btn btn-ghost btn-sm">Deny</button>
+                    </form>
+                    <form method="POST" action="admin_requests.php?sub=topup"
+                          onsubmit="return confirm('Approve this top-up?');">
+                        <input type="hidden" name="action"     value="approve">
+                        <input type="hidden" name="request_id" value="<?= $t['id'] ?>">
+                        <input type="hidden" name="req_type"   value="topup">
+                        <button type="submit" class="btn btn-success btn-sm">Approve Top-up</button>
+                    </form>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endforeach; ?>
+        <?php endif; ?>
+
     <?php else: ?>
-        <p style="font-size:14px;color:var(--text-dim);margin-bottom:20px;">
-            Approving will <strong>soft-delete</strong> the account — all inventory, listings (paused), and offer history are preserved.
-            The account can be fully restored from the <a href="admin_users.php?sub=deleted" style="color:var(--accent);">Users → Undo Deleted</a> page.
-        </p>
 
         <?php if (empty($requests)): ?>
         <div class="table-card">
@@ -681,10 +749,10 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
                         <input type="hidden" name="action"     value="deny">
                         <input type="hidden" name="request_id" value="<?= $d['id'] ?>">
                         <input type="hidden" name="req_type"   value="deletion">
-                        <button type="submit" class="btn btn-ghost btn-sm">Reject — Keep Account</button>
+                        <button type="submit" class="btn btn-ghost btn-sm">Reject</button>
                     </form>
                     <form method="POST" action="admin_requests.php?sub=deletion"
-                          onsubmit="return confirm('Soft-delete this account? All data will be preserved and restorable.');">
+                          onsubmit="return confirm('Soft-delete this account?');">
                         <input type="hidden" name="action"     value="approve">
                         <input type="hidden" name="request_id" value="<?= $d['id'] ?>">
                         <input type="hidden" name="req_type"   value="deletion">
@@ -700,7 +768,6 @@ $pending_deletion = mysqli_fetch_row($dc)[0];
 
 </div>
 
-<!-- ── Transaction Detail Modal ──────────────────────────────────────────── -->
 <div class="modal-overlay" id="txModal">
     <div class="modal">
         <div class="modal-title">Transaction Details</div>
@@ -793,7 +860,7 @@ function openTxModal(data) {
         </div>`;
 
         if (!data.can_revert) {
-            html += `<div class="warn-strip" style="margin-top:16px;">⚠ One or more items are missing from their expected holder. Highlighted items cannot be returned.</div>`;
+            html += `<div class="warn-strip" style="margin-top:16px;">⚠ One or more items are missing from their expected holder.</div>`;
         }
     }
 
@@ -812,7 +879,6 @@ function confirmBlockedRevert() {
     return confirm(
         '⚠ Warning: This revert is flagged as blocked because one or more items ' +
         'are no longer with their expected holder.\n\n' +
-        'The server will still perform a final check and reject it if items are missing. ' +
         'Continue anyway?'
     );
 }
