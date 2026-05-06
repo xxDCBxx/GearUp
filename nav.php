@@ -7,17 +7,19 @@ $active_page = $active_page ?? '';
 $user_credits       = 0;
 $user_picture       = '';
 $user_display_name  = '';
+$user_email         = '';
 $is_admin           = false;
 
 if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] === true) {
     $user_id = $_SESSION["id"];
-    $sql = "SELECT name, credits, picture, is_admin FROM users WHERE id = ?";
+    $sql = "SELECT name, email, credits, picture, is_admin FROM users WHERE id = ?";
     if ($stmt = mysqli_prepare($link, $sql)) {
         mysqli_stmt_bind_param($stmt, "i", $user_id);
         if (mysqli_stmt_execute($stmt)) {
-            mysqli_stmt_bind_result($stmt, $name, $credits, $picture, $admin_flag);
+            mysqli_stmt_bind_result($stmt, $name, $email, $credits, $picture, $admin_flag);
             if (mysqli_stmt_fetch($stmt)) {
                 $user_display_name = $name;
+                $user_email        = $email;
                 $user_credits      = $credits;
                 $user_picture      = $picture;
                 $is_admin          = ($admin_flag == 1);
@@ -46,13 +48,22 @@ if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] === true) {
     <?php endif; ?>
 
     <div class="nav-right">
-        <!-- Balance pill — hidden for admins since they don't trade -->
         <?php if (!$is_admin): ?>
-        <div class="credits" style="cursor:default;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--bg-card-2);border:1px solid var(--border);height:34px;border-radius:50px;">
+        <div class="credits" id="balanceDropdownToggle" style="cursor:pointer;position:relative;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--bg-card-2);border:1px solid var(--border);height:34px;border-radius:50px;">
             <span style="color:var(--text-dim);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;">Balance</span>
             <div style="display:flex;align-items:center;gap:1px;font-weight:700;font-size:14px;line-height:1;">
                 <span style="color:var(--accent);">$</span>
                 <span style="color:#fff;"><?= number_format($user_credits, 2) ?></span>
+            </div>
+            
+            <div class="user-dropdown" id="balanceDropdown" style="width:250px; right:0; padding:15px; cursor:default;">
+                <div style="font-size:12px; font-weight:bold; color:var(--text-dim); margin-bottom:10px; text-transform:uppercase;">Top-up Balance</div>
+                <form action="topup.php" method="POST" style="display:flex; flex-direction:column; gap:10px;">
+                    <input type="hidden" name="action" value="request_topup">
+                    <input type="hidden" name="email" value="<?= htmlspecialchars($user_email ?? '') ?>">
+                    <input type="number" name="amount" placeholder="Amount (USD)" step="0.01" min="1" required style="width:100%; background:var(--bg-dark); border:1px solid var(--border); border-radius:4px; color:#fff; padding:8px 12px; font-size:14px;">
+                    <button type="submit" class="btn btn-accent btn-sm" style="width:100%;">Request Top-up</button>
+                </form>
             </div>
         </div>
         <?php endif; ?>
@@ -97,8 +108,33 @@ if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] === true) {
 <script>
 const toggle   = document.getElementById('userMenuToggle');
 const dropdown = document.getElementById('userDropdown');
+const balToggle = document.getElementById('balanceDropdownToggle');
+const balDropdown = document.getElementById('balanceDropdown');
+
 if (toggle && dropdown) {
-    toggle.addEventListener('click', (e) => { e.stopPropagation(); dropdown.classList.toggle('open'); });
-    document.addEventListener('click', () => dropdown.classList.remove('open'));
+    toggle.addEventListener('click', (e) => { 
+        e.stopPropagation(); 
+        dropdown.classList.toggle('open'); 
+    });
+    dropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
 }
+
+if (balToggle && balDropdown) {
+    balToggle.addEventListener('click', (e) => { 
+        e.stopPropagation();
+        if(!balDropdown.contains(e.target)) {
+            balDropdown.classList.toggle('open'); 
+        }
+    });
+    balDropdown.addEventListener('click', (e) => {
+        e.stopPropagation();
+    });
+}
+
+document.addEventListener('click', () => {
+    if(dropdown) dropdown.classList.remove('open');
+    if(balDropdown) balDropdown.classList.remove('open');
+});
 </script>
