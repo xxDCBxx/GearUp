@@ -16,7 +16,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if ($action === "make_offer" && !empty($_POST["receiver_id"])) {
         $sender_items = $_POST["sender_item_id"] ?? "";
         
-        // Prevent making offer if any of the items are already in a pending offer
         if (!empty($sender_items)) {
             $s_ids = array_filter(array_map('intval', explode(',', $sender_items)));
             $conflict = false;
@@ -53,7 +52,13 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $status = match($action) { "accept_offer" => "accepted", "decline_offer" => "declined", "cancel_offer" => "cancelled", default => "" };
         
         if ($status === "accepted") {
-            $sel = mysqli_prepare($link, "SELECT sender_id, receiver_id, sender_item_id, receiver_item_id FROM trade_offers WHERE id = ? AND receiver_id = ? AND status = 'pending'");
+            $sel = mysqli_prepare($link, "SELECT t.sender_id, t.receiver_id, t.sender_item_id, t.receiver_item_id, 
+                                                 s.email as s_email, s.name as s_name, s.credits as sender_credits, 
+                                                 r.email as r_email, r.name as r_name, r.credits as receiver_credits 
+                                          FROM trade_offers t
+                                          JOIN users s ON s.id = t.sender_id
+                                          JOIN users r ON r.id = t.receiver_id
+                                          WHERE t.id = ? AND t.receiver_id = ? AND t.status = 'pending'");
             mysqli_stmt_bind_param($sel, "ii", $offer_id, $user_id);
             mysqli_stmt_execute($sel);
             $res = mysqli_stmt_get_result($sel);
@@ -98,8 +103,65 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     $add_history = mysqli_prepare($link, "INSERT INTO trade_history (user1_id, user2_id, user1_items, user2_items) VALUES (?, ?, ?, ?)");
                     mysqli_stmt_bind_param($add_history, "iiss", $offer['sender_id'], $offer['receiver_id'], $offer['sender_item_id'], $offer['receiver_item_id']);
                     mysqli_stmt_execute($add_history);
+                    $trade_history_id = mysqli_insert_id($link);
 
                     mysqli_commit($link);
+
+                    $s_items = get_items_by_ids($link, $offer['sender_item_id']);
+                    $r_items = get_items_by_ids($link, $offer['receiver_item_id']);
+                    
+                    $sender_new_balance = $offer['sender_credits'];
+                    $receiver_new_balance = $offer['receiver_credits'];
+
+                    $trans_info_data = [
+                        'Confirmation ID' => $trade_history_id,
+                        'Date Confirmed' => date('r')
+                    ];
+
+                    $build_trade_items_rows = function($items, $prefix) {
+                        if (empty($items)) {
+                            return [['name' => $prefix . ' - Nothing', 'price' => '--']];
+                        }
+                        $rows = [];
+                        foreach($items as $i) {
+                            $rows[] = ['name' => $prefix . ' - ' . $i['name'], 'price' => '--'];
+                        }
+                        return $rows;
+                    };
+
+                    $s_items_rows = $build_trade_items_rows($s_items, "Gave Away");
+                    $r_items_rows = $build_trade_items_rows($r_items, "Received");
+
+                    $trade_summary_base = function($init_bal, $new_bal) {
+                        return [
+                            'Initial Balance' => '$' . number_format($init_bal, 2),
+                            'New Balance' => '$' . number_format($new_bal, 2)
+                        ];
+                    };
+
+                    $sender_trade_items_rows = array_merge($s_items_rows, $r_items_rows);
+                    $receiver_trade_items_rows = array_merge($r_items_rows, $s_items_rows);
+
+                    $s_items_rows_for_r = $build_trade_items_rows($s_items, "Received");
+                    $r_items_rows_for_r = $build_trade_items_rows($r_items, "Gave Away");
+                    $receiver_trade_items_rows = array_merge($r_items_rows_for_r, $s_items_rows_for_r);
+
+                    $sender_receipt_html = generate_receipt_email_body(
+                        "Trade Completed",
+                        $sender_trade_items_rows,
+                        $trade_summary_base($offer['sender_credits'], $sender_new_balance),
+                        $trans_info_data
+                    );
+                    send_smtp_email($offer['s_email'], "Trade Completed - GEARUP!", $sender_receipt_html, EMAIL_SMTP_FROM, EMAIL_SMTP_FROM_NAME, true);
+
+                    $receiver_receipt_html = generate_receipt_email_body(
+                        "Trade Completed",
+                        $receiver_trade_items_rows,
+                        $trade_summary_base($offer['receiver_credits'], $receiver_new_balance),
+                        $trans_info_data
+                    );
+                    send_smtp_email($offer['r_email'], "Trade Completed - GEARUP!", $receiver_receipt_html, EMAIL_SMTP_FROM, EMAIL_SMTP_FROM_NAME, true);
+
                 } catch (Exception $e) {
                     mysqli_rollback($link);
                 }
