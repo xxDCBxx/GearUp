@@ -4,6 +4,9 @@
 -- ------------------------------------------------------
 -- Server version	10.4.32-MariaDB
 
+CREATE DATABASE IF NOT EXISTS `gearup` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE `gearup`;
+
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
 /*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
@@ -49,10 +52,16 @@ DROP TABLE IF EXISTS `deletion_requests`;
 CREATE TABLE `deletion_requests` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
-  `reason` text NOT NULL,
-  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `reason` text NULL,
+  `status` enum('pending','approved','denied') NOT NULL DEFAULT 'pending',
+  `reviewed_by` int(11) NULL,
+  `reviewed_at` DATETIME NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_dr_status` (`status`),
+  KEY `idx_dr_user` (`user_id`),
+  CONSTRAINT `fk_dr_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_dr_reviewer` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -62,7 +71,7 @@ CREATE TABLE `deletion_requests` (
 
 LOCK TABLES `deletion_requests` WRITE;
 /*!40000 ALTER TABLE `deletion_requests` DISABLE KEYS */;
-INSERT INTO `deletion_requests` VALUES (1,5,'quit w','approved','2026-05-05 17:01:53');
+INSERT INTO `deletion_requests` (`id`, `user_id`, `reason`, `status`, `created_at`) VALUES (1,5,'quit w','approved','2026-05-05 17:01:53');
 /*!40000 ALTER TABLE `deletion_requests` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -165,10 +174,13 @@ CREATE TABLE `market_listings` (
   `user_id` int(11) NOT NULL,
   `item_id` int(11) NOT NULL,
   `price` decimal(10,2) NOT NULL,
+  `status` enum('active','sold','cancelled','paused') NOT NULL DEFAULT 'active',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   KEY `item_id` (`item_id`),
+  KEY `idx_ml_status` (`status`),
+  KEY `idx_ml_user_id` (`user_id`),
   CONSTRAINT `fk_market_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_market_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=65 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -180,7 +192,7 @@ CREATE TABLE `market_listings` (
 
 LOCK TABLES `market_listings` WRITE;
 /*!40000 ALTER TABLE `market_listings` DISABLE KEYS */;
-INSERT INTO `market_listings` VALUES (48,1,15,240.00,'2026-04-28 18:28:14'),(49,1,19,5000.00,'2026-04-28 18:28:14'),(58,1,3,10000.00,'2026-05-05 15:15:32');
+INSERT INTO `market_listings` (`id`, `user_id`, `item_id`, `price`, `created_at`) VALUES (48,1,15,240.00,'2026-04-28 18:28:14'),(49,1,19,5000.00,'2026-04-28 18:28:14'),(58,1,3,10000.00,'2026-05-05 15:15:32');
 /*!40000 ALTER TABLE `market_listings` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -194,12 +206,20 @@ DROP TABLE IF EXISTS `revert_requests`;
 CREATE TABLE `revert_requests` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
+  `transaction_id` int(11) NULL,
+  `amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
   `type` enum('market','trade') NOT NULL,
   `reference_id` int(11) NOT NULL,
-  `reason` text NOT NULL,
-  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `reason` text NULL,
+  `status` enum('pending','approved','denied') NOT NULL DEFAULT 'pending',
+  `reviewed_by` int(11) NULL,
+  `reviewed_at` DATETIME NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  KEY `idx_rr_status` (`status`),
+  KEY `idx_rr_user` (`user_id`),
+  CONSTRAINT `fk_rr_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_rr_reviewer` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -209,7 +229,7 @@ CREATE TABLE `revert_requests` (
 
 LOCK TABLES `revert_requests` WRITE;
 /*!40000 ALTER TABLE `revert_requests` DISABLE KEYS */;
-INSERT INTO `revert_requests` VALUES (1,2,'market',1,'Accidental buy','approved','2026-05-05 16:49:34'),(2,2,'trade',1,'accidental','approved','2026-05-05 17:30:50'),(3,2,'market',1,'accidental','rejected','2026-05-05 17:33:23'),(4,2,'market',2,'accidental buy','approved','2026-05-05 17:37:54'),(5,1,'trade',2,'accidental','approved','2026-05-05 17:49:24'),(6,2,'market',3,'accidental buy','pending','2026-05-05 17:52:11'),(7,1,'trade',3,'accidental','pending','2026-05-05 17:57:55'),(8,1,'trade',3,'accidental','pending','2026-05-05 18:03:32');
+INSERT INTO `revert_requests` (`id`, `user_id`, `type`, `reference_id`, `reason`, `status`, `created_at`) VALUES (1,2,'market',1,'Accidental buy','approved','2026-05-05 16:49:34'),(2,2,'trade',1,'accidental','approved','2026-05-05 17:30:50'),(3,2,'market',1,'accidental','denied','2026-05-05 17:33:23'),(4,2,'market',2,'accidental buy','approved','2026-05-05 17:37:54'),(5,1,'trade',2,'accidental','approved','2026-05-05 17:49:24'),(6,2,'market',3,'accidental buy','pending','2026-05-05 17:52:11'),(7,1,'trade',3,'accidental','pending','2026-05-05 17:57:55'),(8,1,'trade',3,'accidental','pending','2026-05-05 18:03:32');
 /*!40000 ALTER TABLE `revert_requests` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -314,9 +334,11 @@ CREATE TABLE `users` (
   `password` varchar(255) NOT NULL,
   `credits` int(11) NOT NULL DEFAULT 10000,
   `is_admin` tinyint(1) DEFAULT 0,
+  `deleted_at` DATETIME NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`),
-  UNIQUE KEY `email` (`email`)
+  UNIQUE KEY `email` (`email`),
+  KEY `idx_deleted_at` (`deleted_at`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -326,7 +348,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'user1','uploads/user_1_1778001172.jpg','user1@gmail.com','$2y$10$abcdefghijklmnopqrstuup2sflzdS6S5FvdNjAk9faR2QjpMgeuO',12257,0),(2,'user2','','user@gmail.com','$2y$10$faYBeLLjauYW0ISq.zdE7u0LayhsjiF.cN089kPgqhN0oETHYulia',7743,0),(3,'admin','','admin@gearup.com','$2y$10$W6hU1Q8OpJTfJc1uNI0pAesBUprhIJq5yG4XJsBHwJxUgrEP7CGmK',10000,1),(6,'user3','','user3@gmail.com','$2y$10$y7YyV7iGFDK4N8.GRxeLLuEyQjGAI9iOAh3NcloCDCMv9MaKr9m3S',99999,0);
+INSERT INTO `users` (`id`, `name`, `picture`, `email`, `password`, `credits`, `is_admin`) VALUES (1,'user1','uploads/user_1_1778001172.jpg','user1@gmail.com','$2y$10$abcdefghijklmnopqrstuup2sflzdS6S5FvdNjAk9faR2QjpMgeuO',12257,0),(2,'user2','','user@gmail.com','$2y$10$faYBeLLjauYW0ISq.zdE7u0LayhsjiF.cN089kPgqhN0oETHYulia',7743,0),(3,'admin','','admin@gearup.com','$2y$10$W6hU1Q8OpJTfJc1uNI0pAesBUprhIJq5yG4XJsBHwJxUgrEP7CGmK',10000,1),(6,'user3','','user3@gmail.com','$2y$10$y7YyV7iGFDK4N8.GRxeLLuEyQjGAI9iOAh3NcloCDCMv9MaKr9m3S',99999,0);
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -340,6 +362,41 @@ UNLOCK TABLES;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-05-06  2:07:18
+
+--
+-- Table structure for table `transactions`
+--
+
+DROP TABLE IF EXISTS `transactions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `transactions` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `type` enum('sale','offer','credit') NOT NULL DEFAULT 'sale',
+  `buyer_id` int(11) NULL,
+  `seller_id` int(11) NULL,
+  `item_id` int(11) NULL,
+  `amount` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `notes` text NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_tx_buyer` (`buyer_id`),
+  KEY `idx_tx_seller` (`seller_id`),
+  KEY `idx_tx_type` (`type`),
+  KEY `idx_tx_created` (`created_at`),
+  CONSTRAINT `fk_tx_buyer`  FOREIGN KEY (`buyer_id`)  REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_tx_seller` FOREIGN KEY (`seller_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `transactions`
+--
+
+LOCK TABLES `transactions` WRITE;
+/*!40000 ALTER TABLE `transactions` DISABLE KEYS */;
+/*!40000 ALTER TABLE `transactions` ENABLE KEYS */;
+UNLOCK TABLES;
 
 DROP TABLE IF EXISTS `password_resets`;
 CREATE TABLE `password_resets` (
