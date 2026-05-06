@@ -74,13 +74,7 @@ if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] === true) {
                 </svg>
             </div>
             <div class="user-dropdown" id="userDropdown">
-                <?php if ($is_admin): ?>
-                <a href="admin_users.php">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                    Admin Dashboard
-                </a>
-                <div class="dropdown-divider"></div>
-                <?php else: ?>
+                <?php if (!$is_admin): ?>
                 <a href="profile.php">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/></svg>
                     My Profile
