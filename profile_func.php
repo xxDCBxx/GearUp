@@ -182,68 +182,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         header("Location: profile.php");
         exit;
     }
-
-    if ($action === "request_topup") {
-        $amount = (float)($_POST["amount"] ?? 0);
-        if ($amount > 0 && $amount <= 10000) {
-            $stmt = mysqli_prepare($link, "SELECT email FROM users WHERE id = ?");
-            mysqli_stmt_bind_param($stmt, "i", $user_id);
-            mysqli_stmt_execute($stmt);
-            $res = mysqli_stmt_get_result($stmt);
-            $user_data = mysqli_fetch_assoc($res);
-            mysqli_stmt_close($stmt);
-
-            if ($user_data) {
-                $code = str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
-                $subject = "Top-Up Verification Code - " . SITE_NAME;
-                $message = "Your verification code to add $" . number_format($amount, 2) . " to your balance is: " . $code . "\r\n\r\nIf you did not request this, please ignore this email.";
-
-                $mailResult = send_smtp_email($user_data['email'], $subject, $message);
-                
-                if ($mailResult['success']) {
-                    $_SESSION['pending_topup_amount'] = $amount;
-                    $_SESSION['pending_topup_code'] = $code;
-                    $_SESSION['show_topup_verify'] = true;
-                    $_SESSION['flash_profile_success'] = "A verification code has been sent to your email.";
-                } else {
-                    $_SESSION['flash_profile_error'] = "Failed to send verification email. " . $mailResult['error'];
-                }
-            }
-        } else {
-            $_SESSION['flash_profile_error'] = "Invalid top-up amount. Maximum allowed is $10,000.";
-        }
-        header("Location: profile.php");
-        exit;
-    }
-
-    if ($action === "verify_topup") {
-        $code = trim($_POST["code"] ?? "");
-        if (isset($_SESSION['pending_topup_code']) && $code === $_SESSION['pending_topup_code']) {
-            $amount = $_SESSION['pending_topup_amount'];
-            
-            $stmt = mysqli_prepare($link, "UPDATE users SET credits = credits + ? WHERE id = ?");
-            mysqli_stmt_bind_param($stmt, "di", $amount, $user_id);
-            if(mysqli_stmt_execute($stmt)) {
-                $_SESSION['flash_profile_success'] = "Successfully added $" . number_format($amount, 2) . " to your balance.";
-                unset($_SESSION['pending_topup_code'], $_SESSION['pending_topup_amount'], $_SESSION['show_topup_verify']);
-            } else {
-                $_SESSION['flash_profile_error'] = "Database error. Failed to add funds.";
-            }
-            mysqli_stmt_close($stmt);
-        } else {
-            $_SESSION['flash_profile_error'] = "Invalid verification code. Please try again.";
-            $_SESSION['show_topup_verify'] = true;
-        }
-        header("Location: profile.php");
-        exit;
-    }
-
-    if ($action === "cancel_topup") {
-        unset($_SESSION['pending_topup_code'], $_SESSION['pending_topup_amount'], $_SESSION['show_topup_verify']);
-        $_SESSION['flash_profile_success'] = "Top-up request cancelled.";
-        header("Location: profile.php");
-        exit;
-    }
 }
 
 function get_user_profile($link, $user_id) {
