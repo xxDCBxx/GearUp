@@ -35,7 +35,6 @@ if (isset($_SESSION["loggedin"]) && $_SESSION["loggedin"] === true) {
         <div class="nav-links">
             <a href="admin_users.php"    class="nav-link <?= $active_page === 'admin_users'    ? 'active' : '' ?>">Users</a>
             <a href="admin_requests.php" class="nav-link <?= $active_page === 'admin_requests' ? 'active' : '' ?>">Requests</a>
-            <a href="admin_records.php"  class="nav-link <?= $active_page === 'admin_records'  ? 'active' : '' ?>">Records</a>
         </div>
     <?php else: ?>
         <a href="home.php" class="nav-logo">GEAR<span style="color:var(--accent);">UP!</span></a>
