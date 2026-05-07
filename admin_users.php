@@ -43,10 +43,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($user_id == $me) { $is_admin_flag = 1; }               // protect self from de-admining
         if (is_protected_admin($link, $user_id)) { $is_admin_flag = 1; } // protect super-admin
 
-        $s = mysqli_prepare($link,
-            "UPDATE users SET name = ?, email = ?, credits = ?, is_admin = ? WHERE id = ?");
-        if (!$s) { die("DB error: " . mysqli_error($link)); }
-        mysqli_stmt_bind_param($s, "ssdii", $username, $email, $credits, $is_admin_flag, $user_id);
+        // Admins cannot edit the email of other admins
+        $target_is_admin = false;
+        if ($user_id != $me) {
+            $chk2 = mysqli_prepare($link, "SELECT is_admin FROM users WHERE id = ?");
+            mysqli_stmt_bind_param($chk2, "i", $user_id);
+            mysqli_stmt_execute($chk2);
+            mysqli_stmt_bind_result($chk2, $target_admin_flag);
+            mysqli_stmt_fetch($chk2);
+            mysqli_stmt_close($chk2);
+            $target_is_admin = (bool)$target_admin_flag;
+        }
+
+        if ($target_is_admin) {
+            // Only allow updating the name; email is locked for other admins
+            $s = mysqli_prepare($link, "UPDATE users SET name = ? WHERE id = ?");
+            if (!$s) { die("DB error: " . mysqli_error($link)); }
+            mysqli_stmt_bind_param($s, "si", $username, $user_id);
+        } else {
+            $s = mysqli_prepare($link,
+                "UPDATE users SET name = ?, email = ?, credits = ?, is_admin = ? WHERE id = ?");
+            if (!$s) { die("DB error: " . mysqli_error($link)); }
+            mysqli_stmt_bind_param($s, "ssdii", $username, $email, $credits, $is_admin_flag, $user_id);
+        }
+
         if (mysqli_stmt_execute($s)) {
             $_SESSION['flash_admin_success'] = "User updated successfully.";
         } else {
@@ -99,23 +119,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Reset password
     elseif ($action === 'reset_password' && $user_id) {
-        $new_pass    = $_POST['new_password']     ?? '';
-        $confirm     = $_POST['confirm_password'] ?? '';
-        if (strlen($new_pass) < 8) {
-            $_SESSION['flash_admin_error'] = "Password must be at least 8 characters.";
-        } elseif ($new_pass !== $confirm) {
-            $_SESSION['flash_admin_error'] = "Passwords do not match.";
+        // Admins cannot reset the password of other admins
+        $can_reset = true;
+        if ($user_id != $me) {
+            $chk3 = mysqli_prepare($link, "SELECT is_admin FROM users WHERE id = ?");
+            mysqli_stmt_bind_param($chk3, "i", $user_id);
+            mysqli_stmt_execute($chk3);
+            mysqli_stmt_bind_result($chk3, $target_is_admin_pw);
+            mysqli_stmt_fetch($chk3);
+            mysqli_stmt_close($chk3);
+            if ($target_is_admin_pw) { $can_reset = false; }
+        }
+        if (!$can_reset) {
+            $_SESSION['flash_admin_error'] = "You cannot reset the password of another admin.";
         } else {
-            $hashed = password_hash($new_pass, PASSWORD_BCRYPT);
-            $s = mysqli_prepare($link, "UPDATE users SET password = ? WHERE id = ?");
-            if (!$s) { die("DB error: " . mysqli_error($link)); }
-            mysqli_stmt_bind_param($s, "si", $hashed, $user_id);
-            if (mysqli_stmt_execute($s)) {
-                $_SESSION['flash_admin_success'] = "Password reset successfully.";
+            $new_pass    = $_POST['new_password']     ?? '';
+            $confirm     = $_POST['confirm_password'] ?? '';
+            if (strlen($new_pass) < 8) {
+                $_SESSION['flash_admin_error'] = "Password must be at least 8 characters.";
+            } elseif ($new_pass !== $confirm) {
+                $_SESSION['flash_admin_error'] = "Passwords do not match.";
             } else {
-                $_SESSION['flash_admin_error'] = "Failed to reset password.";
+                $hashed = password_hash($new_pass, PASSWORD_BCRYPT);
+                $s = mysqli_prepare($link, "UPDATE users SET password = ? WHERE id = ?");
+                if (!$s) { die("DB error: " . mysqli_error($link)); }
+                mysqli_stmt_bind_param($s, "si", $hashed, $user_id);
+                if (mysqli_stmt_execute($s)) {
+                    $_SESSION['flash_admin_success'] = "Password reset successfully.";
+                } else {
+                    $_SESSION['flash_admin_error'] = "Failed to reset password.";
+                }
+                mysqli_stmt_close($s);
             }
-            mysqli_stmt_close($s);
         }
     }
 
@@ -525,12 +560,14 @@ $count_deleted = (int) mysqli_fetch_row(mysqli_query($link, "SELECT COUNT(*) FRO
                                     onclick='openEditModal(<?= json_encode($u, JSON_HEX_APOS | JSON_HEX_QUOT) ?>, true)'>
                                 Edit
                             </button>
-                            <!-- Reset Password -->
+                            <!-- Reset Password: only allowed on own account, not other admins -->
+                            <?php if ($u['id'] == $me): ?>
                             <button class="btn btn-ghost btn-sm"
                                     onclick="openResetModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['name'])) ?>')">
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                                 Reset PW
                             </button>
+                            <?php endif; ?>
                             <?php if ($u['id'] != $me && !$is_protected): ?>
                             <!-- Revoke admin -->
                             <form method="POST" action="admin_users.php?sub=admins" style="display:inline;">
@@ -592,7 +629,7 @@ $count_deleted = (int) mysqli_fetch_row(mysqli_query($link, "SELECT COUNT(*) FRO
                 <label class="field-label">Username</label>
                 <input type="text" name="username" id="editUsername" class="field-input" required>
             </div>
-            <div class="field-group">
+            <div class="field-group" id="editEmailGroup">
                 <label class="field-label">Email</label>
                 <input type="email" name="email" id="editEmail" class="field-input" required>
             </div>
@@ -687,6 +724,20 @@ function openEditModal(u, isAdminTab) {
 
     // Ensure is_admin stays checked when saving from Admins tab
     if (isAdminTab) { document.getElementById('editIsAdmin').checked = true; }
+
+    // On the Admins tab: lock the email field (admins cannot change another admin's email)
+    const emailInput = document.getElementById('editEmail');
+    if (isAdminTab) {
+        emailInput.readOnly = true;
+        emailInput.style.opacity = '0.5';
+        emailInput.style.cursor  = 'not-allowed';
+        emailInput.title = "You cannot change another admin's email.";
+    } else {
+        emailInput.readOnly = false;
+        emailInput.style.opacity = '';
+        emailInput.style.cursor  = '';
+        emailInput.title = '';
+    }
 
     document.getElementById('editUserModal').classList.add('open');
 }
