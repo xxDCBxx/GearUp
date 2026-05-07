@@ -32,7 +32,7 @@ if($_SERVER["REQUEST_METHOD"] == "POST"){
     if(empty(trim($_POST["password"]))){ $password_err = "err"; } else { $password = trim($_POST["password"]); }
 
     if(empty($username_err) && empty($password_err)){
-        $sql = "SELECT id, name, password FROM users WHERE name = ?";
+        $sql = "SELECT id, name, password FROM users WHERE name = ? AND deleted_at IS NULL";
         if($stmt = mysqli_prepare($link, $sql)){
             mysqli_stmt_bind_param($stmt, "s", $param_username);
             $param_username = $username;
