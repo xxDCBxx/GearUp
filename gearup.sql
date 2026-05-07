@@ -3,16 +3,14 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 06, 2026 at 06:29 PM
+-- Generation Time: May 07, 2026 at 05:37 AM
 -- Server version: 10.4.32-MariaDB
--- PHP Version: 8.2.12
+-- PHP Version: 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
 
--- Temporarily disable foreign key checks to allow importing tables out of order
-SET FOREIGN_KEY_CHECKS = 0;
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -56,7 +54,9 @@ CREATE TABLE `deletion_requests` (
 --
 
 INSERT INTO `deletion_requests` (`id`, `user_id`, `reason`, `status`, `reviewed_by`, `reviewed_at`, `created_at`) VALUES
-(1, 5, 'quit w', 'approved', NULL, NULL, '2026-05-05 17:01:53');
+(2, 7, 'quit w', 'approved', 3, '2026-05-07 09:53:20', '2026-05-07 01:53:04'),
+(3, 7, 'ayoko na', 'approved', 3, '2026-05-07 09:56:19', '2026-05-07 01:56:08'),
+(4, 7, 'ayoko na ulit', 'pending', NULL, NULL, '2026-05-07 03:34:11');
 
 -- --------------------------------------------------------
 
@@ -110,8 +110,7 @@ INSERT INTO `items` (`id`, `name`, `image`, `wear_rating`, `rarity`, `float_valu
 (17, 'Team Captain', 'item_images/team_captain.png', 'Unique', 'Rare', NULL, 'tf2'),
 (18, 'Max\'s Severed Head', 'item_images/max_severedhead.png', 'Unique', 'Legendary', NULL, 'tf2'),
 (19, 'Golden Frying Pan', 'item_images/golden_fryingpan.png', 'Strange', 'Exotic', NULL, 'tf2'),
-(20, 'Bill\'s Hat', 'item_images/bill_hat.png', 'Unique', 'Rare', NULL, 'tf2'),
-(21, 'Placeholder Duplicate Item', NULL, NULL, NULL, NULL, 'unknown');
+(20, 'Bill\'s Hat', 'item_images/bill_hat.png', 'Unique', 'Rare', NULL, 'tf2');
 
 -- --------------------------------------------------------
 
@@ -138,7 +137,8 @@ INSERT INTO `market_history` (`id`, `buyer_id`, `seller_id`, `item_id`, `price`,
 (3, 2, 1, 4, 5000.00, '2026-05-05 17:52:02'),
 (4, 7, 1, 3, 10000.00, '2026-05-06 11:22:32'),
 (5, 7, 1, 17, 400.00, '2026-05-06 16:09:29'),
-(6, 7, 1, 5, 1500.00, '2026-05-06 16:20:13');
+(6, 7, 1, 5, 1500.00, '2026-05-06 16:20:13'),
+(7, 7, 1, 20, 100.00, '2026-05-07 03:36:11');
 
 -- --------------------------------------------------------
 
@@ -160,11 +160,66 @@ CREATE TABLE `market_listings` (
 --
 
 INSERT INTO `market_listings` (`id`, `user_id`, `item_id`, `price`, `status`, `created_at`) VALUES
-(48, 1, 15, 240.00, 'active', '2026-04-28 18:28:14'),
-(49, 1, 19, 5000.00, 'active', '2026-04-28 18:28:14'),
-(65, 1, 18, 500.00, 'active', '2026-05-06 14:39:33'),
-(66, 1, 1, 350.00, 'active', '2026-05-06 14:39:37'),
-(67, 1, 20, 100.00, 'active', '2026-05-06 14:39:44');
+(1, 1, 1, 643.03, 'active', '2026-05-07 12:00:00'),
+(2, 1, 2, 34.76, 'active', '2026-05-07 12:00:00'),
+(3, 1, 3, 282.28, 'active', '2026-05-07 12:00:00'),
+(4, 1, 4, 230.98, 'active', '2026-05-07 12:00:00'),
+(5, 1, 5, 739.11, 'active', '2026-05-07 12:00:00'),
+(6, 1, 6, 679.93, 'active', '2026-05-07 12:00:00'),
+(7, 1, 7, 893.26, 'active', '2026-05-07 12:00:00'),
+(8, 1, 8, 96.07, 'active', '2026-05-07 12:00:00'),
+(9, 1, 9, 427.70, 'active', '2026-05-07 12:00:00'),
+(10, 1, 10, 39.50, 'active', '2026-05-07 12:00:00'),
+(11, 1, 11, 226.45, 'active', '2026-05-07 12:00:00'),
+(12, 1, 12, 510.30, 'active', '2026-05-07 12:00:00'),
+(13, 1, 13, 36.27, 'active', '2026-05-07 12:00:00'),
+(14, 1, 14, 206.85, 'active', '2026-05-07 12:00:00'),
+(15, 1, 15, 653.39, 'active', '2026-05-07 12:00:00'),
+(16, 1, 16, 549.49, 'active', '2026-05-07 12:00:00'),
+(17, 1, 17, 228.24, 'active', '2026-05-07 12:00:00'),
+(18, 1, 18, 593.37, 'active', '2026-05-07 12:00:00'),
+(19, 1, 19, 811.34, 'active', '2026-05-07 12:00:00'),
+(20, 1, 20, 16.43, 'active', '2026-05-07 12:00:00'),
+(21, 2, 1, 807.76, 'active', '2026-05-07 12:00:00'),
+(22, 2, 2, 701.16, 'active', '2026-05-07 12:00:00'),
+(23, 2, 3, 346.85, 'active', '2026-05-07 12:00:00'),
+(24, 2, 4, 163.92, 'active', '2026-05-07 12:00:00'),
+(25, 2, 5, 957.64, 'active', '2026-05-07 12:00:00'),
+(26, 2, 6, 343.23, 'active', '2026-05-07 12:00:00'),
+(27, 2, 7, 101.82, 'active', '2026-05-07 12:00:00'),
+(28, 2, 8, 105.75, 'active', '2026-05-07 12:00:00'),
+(29, 2, 9, 849.02, 'active', '2026-05-07 12:00:00'),
+(30, 2, 10, 607.69, 'active', '2026-05-07 12:00:00'),
+(31, 2, 11, 809.06, 'active', '2026-05-07 12:00:00'),
+(32, 2, 12, 732.43, 'active', '2026-05-07 12:00:00'),
+(33, 2, 13, 540.87, 'active', '2026-05-07 12:00:00'),
+(34, 2, 14, 973.38, 'active', '2026-05-07 12:00:00'),
+(35, 2, 15, 384.75, 'active', '2026-05-07 12:00:00'),
+(36, 2, 16, 556.52, 'active', '2026-05-07 12:00:00'),
+(37, 2, 17, 831.11, 'active', '2026-05-07 12:00:00'),
+(38, 2, 18, 622.33, 'active', '2026-05-07 12:00:00'),
+(39, 2, 19, 863.09, 'active', '2026-05-07 12:00:00'),
+(40, 2, 20, 581.58, 'active', '2026-05-07 12:00:00'),
+(41, 7, 1, 707.53, 'active', '2026-05-07 12:00:00'),
+(42, 7, 2, 55.37, 'active', '2026-05-07 12:00:00'),
+(43, 7, 3, 235.62, 'active', '2026-05-07 12:00:00'),
+(44, 7, 4, 296.49, 'active', '2026-05-07 12:00:00'),
+(45, 7, 5, 88.99, 'active', '2026-05-07 12:00:00'),
+(46, 7, 6, 240.46, 'active', '2026-05-07 12:00:00'),
+(47, 7, 7, 109.99, 'active', '2026-05-07 12:00:00'),
+(48, 7, 8, 285.19, 'active', '2026-05-07 12:00:00'),
+(49, 7, 9, 639.33, 'active', '2026-05-07 12:00:00'),
+(50, 7, 10, 371.18, 'active', '2026-05-07 12:00:00'),
+(51, 7, 11, 376.48, 'active', '2026-05-07 12:00:00'),
+(52, 7, 12, 217.41, 'active', '2026-05-07 12:00:00'),
+(53, 7, 13, 274.31, 'active', '2026-05-07 12:00:00'),
+(54, 7, 14, 937.29, 'active', '2026-05-07 12:00:00'),
+(55, 7, 15, 651.56, 'active', '2026-05-07 12:00:00'),
+(56, 7, 16, 613.04, 'active', '2026-05-07 12:00:00'),
+(57, 7, 17, 179.43, 'active', '2026-05-07 12:00:00'),
+(58, 7, 18, 731.84, 'active', '2026-05-07 12:00:00'),
+(59, 7, 19, 171.77, 'active', '2026-05-07 12:00:00'),
+(60, 7, 20, 385.66, 'active', '2026-05-07 12:00:00');
 
 -- --------------------------------------------------------
 
@@ -178,6 +233,13 @@ CREATE TABLE `password_resets` (
   `code` varchar(6) NOT NULL,
   `expiration` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `password_resets`
+--
+
+INSERT INTO `password_resets` (`id`, `email`, `code`, `expiration`) VALUES
+(2, 'brevincortez03@gmail.com', '927360', '2026-05-06 18:11:38');
 
 -- --------------------------------------------------------
 
@@ -239,7 +301,9 @@ CREATE TABLE `topup_requests` (
 INSERT INTO `topup_requests` (`id`, `user_id`, `amount`, `verification_code`, `email_verified`, `status`, `reviewed_by`, `reviewed_at`, `created_at`) VALUES
 (1, 7, 1.00, '176575', 1, 'approved', 3, '2026-05-06 23:56:54', '2026-05-06 15:50:36'),
 (2, 7, 5000.00, '227574', 0, 'pending', NULL, NULL, '2026-05-06 15:57:13'),
-(3, 7, 5000.00, '879862', 1, 'approved', 3, '2026-05-06 23:58:05', '2026-05-06 15:57:18');
+(3, 7, 5000.00, '879862', 1, 'approved', 3, '2026-05-06 23:58:05', '2026-05-06 15:57:18'),
+(4, 7, 500.00, '386975', 1, 'approved', 3, '2026-05-07 10:46:43', '2026-05-07 02:46:03'),
+(5, 7, 500.00, '924180', 1, 'pending', NULL, NULL, '2026-05-07 02:48:01');
 
 -- --------------------------------------------------------
 
@@ -300,7 +364,8 @@ INSERT INTO `trade_offers` (`id`, `sender_id`, `receiver_id`, `sender_item_id`, 
 (11, 2, 1, '5', '18', 'accepted', '2026-05-05 17:49:03'),
 (12, 2, 1, '8,5', '4', 'cancelled', '2026-05-05 17:51:55'),
 (13, 2, 1, '8,5', '10', 'accepted', '2026-05-05 17:57:23'),
-(14, 7, 1, '3', '8', 'accepted', '2026-05-06 16:21:57');
+(14, 7, 1, '3', '8', 'accepted', '2026-05-06 16:21:57'),
+(15, 7, 1, '17', '20', 'pending', '2026-05-07 02:31:16');
 
 -- --------------------------------------------------------
 
@@ -341,11 +406,11 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `picture`, `email`, `password`, `credits`, `is_admin`, `deleted_at`) VALUES
-(1, 'user1', 'uploads/user_1_1778001172.jpg', 'user1@gmail.com', '$2y$10$abcdefghijklmnopqrstuup2sflzdS6S5FvdNjAk9faR2QjpMgeuO', 24157, 0, NULL),
-(2, 'user2', '', 'user@gmail.com', '$2y$10$faYBeLLjauYW0ISq.zdE7u0LayhsjiF.cN089kPgqhN0oETHYulia', 7743, 0, NULL),
+(1, 'user1', 'uploads/user_1_1778001172.jpg', 'c22-1538-476@uphsl.edu.ph', '$2y$10$abcdefghijklmnopqrstuup2sflzdS6S5FvdNjAk9faR2QjpMgeuO', 24257, 0, NULL),
+(2, 'user2', '', 'c1-241-01220@gmail.com', '$2y$10$faYBeLLjauYW0ISq.zdE7u0LayhsjiF.cN089kPgqhN0oETHYulia', 7743, 0, NULL),
 (3, 'admin', '', 'admin@gearup.com', '$2y$10$W6hU1Q8OpJTfJc1uNI0pAesBUprhIJq5yG4XJsBHwJxUgrEP7CGmK', 10000, 1, NULL),
 (6, 'user3', '', 'user3@gmail.com', '$2y$10$y7YyV7iGFDK4N8.GRxeLLuEyQjGAI9iOAh3NcloCDCMv9MaKr9m3S', 99999, 0, NULL),
-(7, 'brevin', '', 'brevincortez03@gmail.com', '$2y$10$gDK9E1gUgzDiLI051aueke8OmqDIVMfw0AgEkt3ORSALTkmydMW/W', 5101, 0, NULL);
+(7, 'brevin', '', 'brevincortez03@gmail.com', '$2y$10$gDK9E1gUgzDiLI051aueke8OmqDIVMfw0AgEkt3ORSALTkmydMW/W', 5501, 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -364,21 +429,66 @@ CREATE TABLE `user_items` (
 --
 
 INSERT INTO `user_items` (`id`, `user_id`, `item_id`) VALUES
-(42, 1, 2),
-(43, 1, 6),
-(44, 1, 7),
-(45, 1, 11),
-(46, 1, 12),
-(47, 1, 13),
-(48, 1, 16),
-(54, 1, 9),
-(65, 2, 14),
-(70, 2, 4),
-(71, 2, 10),
-(72, 1, 3),
-(73, 7, 17),
-(74, 7, 5),
-(75, 7, 8);
+(1, 1, 1),
+(2, 1, 2),
+(3, 1, 3),
+(4, 1, 4),
+(5, 1, 5),
+(6, 1, 6),
+(7, 1, 7),
+(8, 1, 8),
+(9, 1, 9),
+(10, 1, 10),
+(11, 1, 11),
+(12, 1, 12),
+(13, 1, 13),
+(14, 1, 14),
+(15, 1, 15),
+(16, 1, 16),
+(17, 1, 17),
+(18, 1, 18),
+(19, 1, 19),
+(20, 1, 20),
+(21, 2, 1),
+(22, 2, 2),
+(23, 2, 3),
+(24, 2, 4),
+(25, 2, 5),
+(26, 2, 6),
+(27, 2, 7),
+(28, 2, 8),
+(29, 2, 9),
+(30, 2, 10),
+(31, 2, 11),
+(32, 2, 12),
+(33, 2, 13),
+(34, 2, 14),
+(35, 2, 15),
+(36, 2, 16),
+(37, 2, 17),
+(38, 2, 18),
+(39, 2, 19),
+(40, 2, 20),
+(41, 7, 1),
+(42, 7, 2),
+(43, 7, 3),
+(44, 7, 4),
+(45, 7, 5),
+(46, 7, 6),
+(47, 7, 7),
+(48, 7, 8),
+(49, 7, 9),
+(50, 7, 10),
+(51, 7, 11),
+(52, 7, 12),
+(53, 7, 13),
+(54, 7, 14),
+(55, 7, 15),
+(56, 7, 16),
+(57, 7, 17),
+(58, 7, 18),
+(59, 7, 19),
+(60, 7, 20);
 
 --
 -- Indexes for dumped tables
@@ -506,7 +616,7 @@ ALTER TABLE `admin_users`
 -- AUTO_INCREMENT for table `deletion_requests`
 --
 ALTER TABLE `deletion_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `games`
@@ -518,25 +628,25 @@ ALTER TABLE `games`
 -- AUTO_INCREMENT for table `items`
 --
 ALTER TABLE `items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT for table `market_history`
 --
 ALTER TABLE `market_history`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `market_listings`
 --
 ALTER TABLE `market_listings`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=71;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=61;
 
 --
 -- AUTO_INCREMENT for table `password_resets`
 --
 ALTER TABLE `password_resets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `revert_requests`
@@ -548,7 +658,7 @@ ALTER TABLE `revert_requests`
 -- AUTO_INCREMENT for table `topup_requests`
 --
 ALTER TABLE `topup_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `trade_history`
@@ -560,7 +670,7 @@ ALTER TABLE `trade_history`
 -- AUTO_INCREMENT for table `trade_offers`
 --
 ALTER TABLE `trade_offers`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT for table `transactions`
@@ -578,7 +688,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `user_items`
 --
 ALTER TABLE `user_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=76;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=61;
 
 --
 -- Constraints for dumped tables
@@ -632,9 +742,6 @@ ALTER TABLE `transactions`
 ALTER TABLE `user_items`
   ADD CONSTRAINT `fk_inventory_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_inventory_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
-
--- Re-enable foreign key checks now that all tables and data are inserted
-SET FOREIGN_KEY_CHECKS = 1;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
