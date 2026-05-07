@@ -97,6 +97,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sub = 'deleted';
     }
 
+    // Reset password
+    elseif ($action === 'reset_password' && $user_id) {
+        $new_pass    = $_POST['new_password']     ?? '';
+        $confirm     = $_POST['confirm_password'] ?? '';
+        if (strlen($new_pass) < 8) {
+            $_SESSION['flash_admin_error'] = "Password must be at least 8 characters.";
+        } elseif ($new_pass !== $confirm) {
+            $_SESSION['flash_admin_error'] = "Passwords do not match.";
+        } else {
+            $hashed = password_hash($new_pass, PASSWORD_BCRYPT);
+            $s = mysqli_prepare($link, "UPDATE users SET password = ? WHERE id = ?");
+            if (!$s) { die("DB error: " . mysqli_error($link)); }
+            mysqli_stmt_bind_param($s, "si", $hashed, $user_id);
+            if (mysqli_stmt_execute($s)) {
+                $_SESSION['flash_admin_success'] = "Password reset successfully.";
+            } else {
+                $_SESSION['flash_admin_error'] = "Failed to reset password.";
+            }
+            mysqli_stmt_close($s);
+        }
+    }
+
     // Update credits only
     elseif ($action === 'update_credits' && $user_id) {
         $new_credits = (float)($_POST['credits'] ?? 0);
@@ -503,6 +525,12 @@ $count_deleted = (int) mysqli_fetch_row(mysqli_query($link, "SELECT COUNT(*) FRO
                                     onclick='openEditModal(<?= json_encode($u, JSON_HEX_APOS | JSON_HEX_QUOT) ?>, true)'>
                                 Edit
                             </button>
+                            <!-- Reset Password -->
+                            <button class="btn btn-ghost btn-sm"
+                                    onclick="openResetModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['name'])) ?>')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                Reset PW
+                            </button>
                             <?php if ($u['id'] != $me && !$is_protected): ?>
                             <!-- Revoke admin -->
                             <form method="POST" action="admin_users.php?sub=admins" style="display:inline;">
@@ -526,6 +554,12 @@ $count_deleted = (int) mysqli_fetch_row(mysqli_query($link, "SELECT COUNT(*) FRO
                             <button class="btn btn-ghost btn-sm"
                                     onclick='openEditModal(<?= json_encode($u, JSON_HEX_APOS | JSON_HEX_QUOT) ?>, false)'>
                                 Edit
+                            </button>
+                            <!-- Reset Password -->
+                            <button class="btn btn-ghost btn-sm"
+                                    onclick="openResetModal(<?= $u['id'] ?>, '<?= htmlspecialchars(addslashes($u['name'])) ?>')">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                Reset PW
                             </button>
                             <?php if ($u['id'] != $me): ?>
                             <!-- Delete -->
@@ -581,6 +615,40 @@ $count_deleted = (int) mysqli_fetch_row(mysqli_query($link, "SELECT COUNT(*) FRO
     </div>
 </div>
 
+<!-- ── Reset Password Modal ───────────────────────────────────────────────── -->
+<div class="modal-overlay" id="resetPasswordModal">
+    <div class="modal">
+        <div class="modal-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:6px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Reset Password — <span id="resetModalName" style="color:var(--accent);"></span>
+        </div>
+        <form method="POST" action="admin_users.php?sub=<?= htmlspecialchars($sub) ?>">
+            <input type="hidden" name="action"  value="reset_password">
+            <input type="hidden" name="user_id" id="resetUserId">
+            <div class="field-group">
+                <label class="field-label">New Password <span style="color:var(--text-muted);font-weight:400;">(min 8 characters)</span></label>
+                <input type="password" name="new_password" id="resetNewPassword" class="field-input"
+                       minlength="8" required autocomplete="new-password"
+                       placeholder="Enter new password…">
+            </div>
+            <div class="field-group">
+                <label class="field-label">Confirm Password</label>
+                <input type="password" name="confirm_password" id="resetConfirmPassword" class="field-input"
+                       minlength="8" required autocomplete="new-password"
+                       placeholder="Re-enter new password…">
+            </div>
+            <div id="resetPasswordError" style="display:none;font-size:13px;color:var(--danger);margin-bottom:10px;"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeResetModal()">Cancel</button>
+                <button type="submit" class="btn btn-warn" onclick="return validateResetForm()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Reset Password
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <!-- ── Soft-delete confirm overlay ───────────────────────────────────────── -->
 <div id="confirm-overlay">
     <div id="confirm-box">
@@ -628,6 +696,36 @@ function closeEditModal() {
 document.getElementById('editUserModal').addEventListener('click', function(e) {
     if (e.target === this) closeEditModal();
 });
+
+// ── Reset Password modal ───────────────────────────────────────────────────
+function openResetModal(uid, name) {
+    document.getElementById('resetUserId').value      = uid;
+    document.getElementById('resetModalName').textContent = name;
+    document.getElementById('resetNewPassword').value = '';
+    document.getElementById('resetConfirmPassword').value = '';
+    document.getElementById('resetPasswordError').style.display = 'none';
+    document.getElementById('resetPasswordModal').classList.add('open');
+}
+function closeResetModal() {
+    document.getElementById('resetPasswordModal').classList.remove('open');
+}
+document.getElementById('resetPasswordModal').addEventListener('click', function(e) {
+    if (e.target === this) closeResetModal();
+});
+function validateResetForm() {
+    const pw  = document.getElementById('resetNewPassword').value;
+    const cpw = document.getElementById('resetConfirmPassword').value;
+    const err = document.getElementById('resetPasswordError');
+    if (pw.length < 8) {
+        err.textContent = 'Password must be at least 8 characters.';
+        err.style.display = 'block'; return false;
+    }
+    if (pw !== cpw) {
+        err.textContent = 'Passwords do not match.';
+        err.style.display = 'block'; return false;
+    }
+    return true;
+}
 
 // ── Soft-delete confirm ────────────────────────────────────────────────────
 function confirmDelete(uid, name) {
