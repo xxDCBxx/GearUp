@@ -1,5 +1,18 @@
 <?php
 require_once "home_func.php";
+
+// Redirect admins straight to the admin panel
+$_me = $_SESSION['id'];
+$_chk = mysqli_prepare($link, "SELECT is_admin FROM users WHERE id = ?");
+if ($_chk) {
+    mysqli_stmt_bind_param($_chk, "i", $_me);
+    mysqli_stmt_execute($_chk);
+    mysqli_stmt_bind_result($_chk, $_is_admin);
+    mysqli_stmt_fetch($_chk);
+    mysqli_stmt_close($_chk);
+    if ($_is_admin) { header("location: admin_users.php"); exit; }
+}
+
 $active_page = 'home';
 ?>
 <!DOCTYPE html>

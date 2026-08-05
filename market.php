@@ -534,18 +534,18 @@ async function processPurchase() {
     const errorDiv = document.getElementById('buyError');
     btn.disabled = true;
     btn.textContent = "Processing...";
+    
     const formData = new FormData();
     formData.append('ajax_action', 'buy_item');
     formData.append('listing_id', currentListingId);
+    
     try {
         const response = await fetch(window.location.href, { method: 'POST', body: formData });
         const result = await response.json();
+        
         if (result.success) {
-            document.getElementById('listing-row-' + currentListingId).remove();
-            const creditEl = document.getElementById('user-credits');
-            if (creditEl) creditEl.textContent = result.new_balance;
-            closeBuyModal();
             alert("Purchase successful!");
+            window.location.reload();
         } else {
             errorDiv.textContent = result.error;
             errorDiv.style.display = 'block';

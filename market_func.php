@@ -96,7 +96,6 @@ function get_my_trade_inventory($link, int $user_id): array {
     $inventory = mysqli_fetch_all($result, MYSQLI_ASSOC);
     mysqli_stmt_close($stmt);
 
-    // Fetch pending trade items to filter them out
     $pending_items = [];
     $check_sql = "SELECT sender_item_id FROM trade_offers WHERE sender_id = ? AND status = 'pending'";
     $check_stmt = mysqli_prepare($link, $check_sql);
@@ -128,9 +127,14 @@ function get_my_trade_inventory($link, int $user_id): array {
 function process_market_purchase($link, $buyer_id, $listing_id) {
     mysqli_begin_transaction($link);
     try {
-        $stmt = mysqli_prepare($link, "SELECT ml.item_id, ml.user_id as seller_id, ml.price, u.credits as buyer_credits 
+        $stmt = mysqli_prepare($link, "SELECT ml.item_id, ml.user_id as seller_id, ml.price, 
+                                       u.credits as buyer_credits, u.email as buyer_email, u.name as buyer_name,
+                                       s.email as seller_email, s.name as seller_name, s.credits as seller_credits,
+                                       i.name as item_name
                                        FROM market_listings ml 
                                        JOIN users u ON u.id = ? 
+                                       JOIN users s ON s.id = ml.user_id
+                                       JOIN items i ON i.id = ml.item_id
                                        WHERE ml.id = ?");
         mysqli_stmt_bind_param($stmt, "ii", $buyer_id, $listing_id);
         mysqli_stmt_execute($stmt);
@@ -160,9 +164,44 @@ function process_market_purchase($link, $buyer_id, $listing_id) {
         $add_history = mysqli_prepare($link, "INSERT INTO market_history (buyer_id, seller_id, item_id, price) VALUES (?, ?, ?, ?)");
         mysqli_stmt_bind_param($add_history, "iiid", $buyer_id, $listing['seller_id'], $listing['item_id'], $listing['price']);
         mysqli_stmt_execute($add_history);
+        $market_history_id = mysqli_insert_id($link);
 
         mysqli_commit($link);
-        return ["success" => true, "new_balance" => number_format($listing['buyer_credits'] - $listing['price'], 2)];
+
+        $buyer_new_balance = $listing['buyer_credits'] - $listing['price'];
+        $seller_new_balance = $listing['seller_credits'] + $listing['price'];
+
+        $purchase_receipt_html = generate_receipt_email_body(
+            "Purchase Receipt",
+            [['name' => $listing['item_name'], 'price' => number_format($listing['price'], 2) . ' USD']],
+            [
+                'Total' => number_format($listing['price'], 2) . ' USD',
+                'Initial Balance' => '$' . number_format($listing['buyer_credits'], 2),
+                'New Balance' => '$' . number_format($buyer_new_balance, 2)
+            ],
+            [
+                'Confirmation ID' => $market_history_id,
+                'Date Confirmed' => date('r')
+            ]
+        );
+        send_smtp_email($listing['buyer_email'], "Purchase Receipt - GEARUP!", $purchase_receipt_html, EMAIL_SMTP_FROM, EMAIL_SMTP_FROM_NAME, true);
+
+        $sale_receipt_html = generate_receipt_email_body(
+            "Sale Confirmation",
+            [['name' => $listing['item_name'], 'price' => number_format($listing['price'], 2) . ' USD']],
+            [
+                'Total' => number_format($listing['price'], 2) . ' USD',
+                'Initial Balance' => '$' . number_format($listing['seller_credits'], 2),
+                'New Balance' => '$' . number_format($seller_new_balance, 2)
+            ],
+            [
+                'Confirmation ID' => $market_history_id,
+                'Date Confirmed' => date('r')
+            ]
+        );
+        send_smtp_email($listing['seller_email'], "Item Sold - GEARUP!", $sale_receipt_html, EMAIL_SMTP_FROM, EMAIL_SMTP_FROM_NAME, true);
+
+        return ["success" => true, "new_balance" => number_format($buyer_new_balance, 2)];
     } catch (Exception $e) {
         mysqli_rollback($link);
         return ["success" => false, "error" => $e->getMessage()];
