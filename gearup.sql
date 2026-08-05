@@ -312,7 +312,7 @@ CREATE TABLE `users` (
   `picture` varchar(255) NOT NULL,
   `email` varchar(255) NOT NULL,
   `password` varchar(255) NOT NULL,
-  `credits` int(11) NOT NULL DEFAULT 10000,
+  `credits` decimal(10,2) NOT NULL DEFAULT 10000.00,
   `is_admin` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`),

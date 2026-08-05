@@ -67,8 +67,16 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         
         mysqli_begin_transaction($link);
         try {
-            mysqli_query($link, "DELETE FROM users WHERE id = $target_id");
-            mysqli_query($link, "UPDATE deletion_requests SET status = 'approved' WHERE id = $request_id");
+            $del_stmt = mysqli_prepare($link, "DELETE FROM users WHERE id = ?");
+            mysqli_stmt_bind_param($del_stmt, "i", $target_id);
+            mysqli_stmt_execute($del_stmt);
+            mysqli_stmt_close($del_stmt);
+
+            $upd_stmt = mysqli_prepare($link, "UPDATE deletion_requests SET status = 'approved' WHERE id = ?");
+            mysqli_stmt_bind_param($upd_stmt, "i", $request_id);
+            mysqli_stmt_execute($upd_stmt);
+            mysqli_stmt_close($upd_stmt);
+
             mysqli_commit($link);
             $_SESSION['flash_admin_success'] = "User account permanently deleted.";
         } catch(Exception $e) {
@@ -80,7 +88,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     elseif ($action === "reject_deletion") {
         $request_id = (int)$_POST['request_id'];
-        mysqli_query($link, "UPDATE deletion_requests SET status = 'rejected' WHERE id = $request_id");
+        $rej_stmt = mysqli_prepare($link, "UPDATE deletion_requests SET status = 'rejected' WHERE id = ?");
+        mysqli_stmt_bind_param($rej_stmt, "i", $request_id);
+        mysqli_stmt_execute($rej_stmt);
+        mysqli_stmt_close($rej_stmt);
         $_SESSION['flash_admin_success'] = "Deletion request rejected.";
         $redirect_tab = 'deletions';
     }
@@ -103,18 +114,37 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 if (!$trade) throw new Exception("Market history not found.");
                 
                 // Strict Check: Buyer must have the item, Seller must have the money
-                $check_item = mysqli_query($link, "SELECT id FROM user_items WHERE user_id = {$trade['buyer_id']} AND item_id = {$trade['item_id']} LIMIT 1");
-                if (mysqli_num_rows($check_item) == 0) throw new Exception("Buyer no longer has the item.");
-                $ui_row = mysqli_fetch_assoc($check_item);
+                $chk_stmt = mysqli_prepare($link, "SELECT id FROM user_items WHERE user_id = ? AND item_id = ? LIMIT 1");
+                mysqli_stmt_bind_param($chk_stmt, "ii", $trade['buyer_id'], $trade['item_id']);
+                mysqli_stmt_execute($chk_stmt);
+                $chk_res = mysqli_stmt_get_result($chk_stmt);
+                $ui_row = mysqli_fetch_assoc($chk_res);
+                mysqli_stmt_close($chk_stmt);
+                if (!$ui_row) throw new Exception("Buyer no longer has the item.");
                 
-                $check_credits = mysqli_query($link, "SELECT credits FROM users WHERE id = {$trade['seller_id']}");
-                $s_cred = mysqli_fetch_assoc($check_credits)['credits'];
+                $cred_stmt = mysqli_prepare($link, "SELECT credits FROM users WHERE id = ?");
+                mysqli_stmt_bind_param($cred_stmt, "i", $trade['seller_id']);
+                mysqli_stmt_execute($cred_stmt);
+                $cred_res = mysqli_stmt_get_result($cred_stmt);
+                $s_cred = mysqli_fetch_assoc($cred_res)['credits'];
+                mysqli_stmt_close($cred_stmt);
                 if ($s_cred < $trade['price']) throw new Exception("Seller does not have enough credits to refund.");
 
                 // Revert
-                mysqli_query($link, "UPDATE users SET credits = credits + {$trade['price']} WHERE id = {$trade['buyer_id']}");
-                mysqli_query($link, "UPDATE users SET credits = credits - {$trade['price']} WHERE id = {$trade['seller_id']}");
-                mysqli_query($link, "UPDATE user_items SET user_id = {$trade['seller_id']} WHERE id = {$ui_row['id']}");
+                $upd1 = mysqli_prepare($link, "UPDATE users SET credits = credits + ? WHERE id = ?");
+                mysqli_stmt_bind_param($upd1, "di", $trade['price'], $trade['buyer_id']);
+                mysqli_stmt_execute($upd1);
+                mysqli_stmt_close($upd1);
+
+                $upd2 = mysqli_prepare($link, "UPDATE users SET credits = credits - ? WHERE id = ?");
+                mysqli_stmt_bind_param($upd2, "di", $trade['price'], $trade['seller_id']);
+                mysqli_stmt_execute($upd2);
+                mysqli_stmt_close($upd2);
+
+                $upd3 = mysqli_prepare($link, "UPDATE user_items SET user_id = ? WHERE id = ?");
+                mysqli_stmt_bind_param($upd3, "ii", $trade['seller_id'], $ui_row['id']);
+                mysqli_stmt_execute($upd3);
+                mysqli_stmt_close($upd3);
             } 
             elseif ($type === 'trade') {
                 $stmt = mysqli_prepare($link, "SELECT user1_id, user2_id, user1_items, user2_items FROM trade_history WHERE id = ?");
@@ -130,26 +160,40 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                 $u2_items = array_filter(array_map('intval', explode(',', $trade['user2_items'])));
 
                 // Check User 2 has User 1's items
+                $chk_stmt = mysqli_prepare($link, "SELECT id FROM user_items WHERE user_id = ? AND item_id = ? LIMIT 1");
                 foreach($u1_items as $item_id) {
-                    $chk = mysqli_query($link, "SELECT id FROM user_items WHERE user_id = {$trade['user2_id']} AND item_id = $item_id LIMIT 1");
-                    if(mysqli_num_rows($chk) == 0) throw new Exception("User 2 no longer has the required items.");
+                    mysqli_stmt_bind_param($chk_stmt, "ii", $trade['user2_id'], $item_id);
+                    mysqli_stmt_execute($chk_stmt);
+                    $chk_res = mysqli_stmt_get_result($chk_stmt);
+                    if(!mysqli_fetch_assoc($chk_res)) throw new Exception("User 2 no longer has the required items.");
                 }
                 // Check User 1 has User 2's items
                 foreach($u2_items as $item_id) {
-                    $chk = mysqli_query($link, "SELECT id FROM user_items WHERE user_id = {$trade['user1_id']} AND item_id = $item_id LIMIT 1");
-                    if(mysqli_num_rows($chk) == 0) throw new Exception("User 1 no longer has the required items.");
+                    mysqli_stmt_bind_param($chk_stmt, "ii", $trade['user1_id'], $item_id);
+                    mysqli_stmt_execute($chk_stmt);
+                    $chk_res = mysqli_stmt_get_result($chk_stmt);
+                    if(!mysqli_fetch_assoc($chk_res)) throw new Exception("User 1 no longer has the required items.");
                 }
+                mysqli_stmt_close($chk_stmt);
 
                 // Revert Items
+                $move_stmt = mysqli_prepare($link, "UPDATE user_items SET user_id = ? WHERE user_id = ? AND item_id = ? LIMIT 1");
                 foreach($u1_items as $item_id) {
-                    mysqli_query($link, "UPDATE user_items SET user_id = {$trade['user1_id']} WHERE user_id = {$trade['user2_id']} AND item_id = $item_id LIMIT 1");
+                    mysqli_stmt_bind_param($move_stmt, "iii", $trade['user1_id'], $trade['user2_id'], $item_id);
+                    mysqli_stmt_execute($move_stmt);
                 }
                 foreach($u2_items as $item_id) {
-                    mysqli_query($link, "UPDATE user_items SET user_id = {$trade['user2_id']} WHERE user_id = {$trade['user1_id']} AND item_id = $item_id LIMIT 1");
+                    mysqli_stmt_bind_param($move_stmt, "iii", $trade['user2_id'], $trade['user1_id'], $item_id);
+                    mysqli_stmt_execute($move_stmt);
                 }
+                mysqli_stmt_close($move_stmt);
             }
 
-            mysqli_query($link, "UPDATE revert_requests SET status = 'approved' WHERE id = $request_id");
+            $upd_req = mysqli_prepare($link, "UPDATE revert_requests SET status = 'approved' WHERE id = ?");
+            mysqli_stmt_bind_param($upd_req, "i", $request_id);
+            mysqli_stmt_execute($upd_req);
+            mysqli_stmt_close($upd_req);
+
             mysqli_commit($link);
             $_SESSION['flash_admin_success'] = "Trade reverted successfully.";
         } catch(Exception $e) {
@@ -161,7 +205,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     elseif ($action === "reject_revert") {
         $request_id = (int)$_POST['request_id'];
-        mysqli_query($link, "UPDATE revert_requests SET status = 'rejected' WHERE id = $request_id");
+        $rej_stmt = mysqli_prepare($link, "UPDATE revert_requests SET status = 'rejected' WHERE id = ?");
+        mysqli_stmt_bind_param($rej_stmt, "i", $request_id);
+        mysqli_stmt_execute($rej_stmt);
+        mysqli_stmt_close($rej_stmt);
         $_SESSION['flash_admin_success'] = "Revert request rejected.";
         $redirect_tab = 'reverts';
     }
@@ -224,15 +271,23 @@ function get_revert_requests($link) {
                 $tdata['user1_name'] = $trade['user1_name'];
                 $tdata['user2_name'] = $trade['user2_name'];
                 
-                $get_items = function($ids) use ($link) {
-                    if(empty($ids)) return [];
-                    $res = mysqli_query($link, "SELECT name, image, game, wear_rating, rarity FROM items WHERE id IN ($ids)");
+                $get_items = function($ids_str) use ($link) {
+                    if(empty($ids_str)) return [];
+                    $id_arr = array_filter(array_map('intval', explode(',', $ids_str)));
+                    if(empty($id_arr)) return [];
+                    $placeholders = implode(',', array_fill(0, count($id_arr), '?'));
+                    $types = str_repeat('i', count($id_arr));
+                    $stmt = mysqli_prepare($link, "SELECT name, image, game, wear_rating, rarity FROM items WHERE id IN ($placeholders)");
+                    mysqli_stmt_bind_param($stmt, $types, ...$id_arr);
+                    mysqli_stmt_execute($stmt);
+                    $res = mysqli_stmt_get_result($stmt);
                     $arr = [];
                     while($row = mysqli_fetch_assoc($res)) {
                         $gi = admin_game_info($row['game']);
                         $row['game_logo'] = $gi['logo'];
                         $arr[] = $row;
                     }
+                    mysqli_stmt_close($stmt);
                     return $arr;
                 };
                 

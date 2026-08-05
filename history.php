@@ -15,11 +15,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action']) && $_POST['
     $reason = trim($_POST['reason'] ?? '');
     
     if (in_array($type, ['market', 'trade']) && $reference_id > 0 && !empty($reason)) {
-        $stmt = mysqli_prepare($link, "INSERT INTO revert_requests (user_id, type, reference_id, reason) VALUES (?, ?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, "isis", $user_id, $type, $reference_id, $reason);
-        mysqli_stmt_execute($stmt);
-        mysqli_stmt_close($stmt);
-        $success_msg = "Revert request submitted successfully.";
+        // Check for existing pending revert request for this transaction
+        $dup_stmt = mysqli_prepare($link, "SELECT id FROM revert_requests WHERE type = ? AND reference_id = ? AND status = 'pending'");
+        mysqli_stmt_bind_param($dup_stmt, "si", $type, $reference_id);
+        mysqli_stmt_execute($dup_stmt);
+        mysqli_stmt_store_result($dup_stmt);
+        $already_exists = (mysqli_stmt_num_rows($dup_stmt) > 0);
+        mysqli_stmt_close($dup_stmt);
+
+        if ($already_exists) {
+            $success_msg = "A revert request for this transaction is already pending.";
+        } else {
+            $stmt = mysqli_prepare($link, "INSERT INTO revert_requests (user_id, type, reference_id, reason) VALUES (?, ?, ?, ?)");
+            mysqli_stmt_bind_param($stmt, "isis", $user_id, $type, $reference_id, $reason);
+            mysqli_stmt_execute($stmt);
+            mysqli_stmt_close($stmt);
+            $success_msg = "Revert request submitted successfully.";
+        }
     }
 }
 
@@ -61,9 +73,15 @@ function get_items_by_ids($link, $ids_string) {
     if (empty($ids_string)) return [];
     $ids = array_filter(array_map('intval', explode(',', $ids_string)));
     if (empty($ids)) return [];
-    $in_clause = implode(',', $ids);
-    $res = mysqli_query($link, "SELECT id, name, image FROM items WHERE id IN ($in_clause)");
-    return mysqli_fetch_all($res, MYSQLI_ASSOC);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $types = str_repeat('i', count($ids));
+    $stmt = mysqli_prepare($link, "SELECT id, name, image FROM items WHERE id IN ($placeholders)");
+    mysqli_stmt_bind_param($stmt, $types, ...$ids);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $items = mysqli_fetch_all($res, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
+    return $items;
 }
 
 $active_page = 'history';

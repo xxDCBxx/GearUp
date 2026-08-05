@@ -133,7 +133,7 @@ if($_SERVER["REQUEST_METHOD"] == "POST"){
         <?php endif; ?>
 
         <?php if(!empty($login_err)): ?>
-            <div class="alert-error"><?php echo $login_err; ?></div>
+            <div class="alert-error"><?php echo htmlspecialchars($login_err); ?></div>
         <?php endif; ?>
 
         <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post">

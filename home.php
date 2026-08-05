@@ -1,7 +1,6 @@
 <?php
 require_once "home_func.php";
 $active_page = 'home';
-$featured_items = get_featured_items($link, 12);
 ?>
 <!DOCTYPE html>
 <html lang="en">

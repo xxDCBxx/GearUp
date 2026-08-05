@@ -503,6 +503,20 @@ function checkFormReady() {
     document.getElementById('sendOfferBtn').disabled = !(isChecked && hasItems);
 }
 
+function removeSenderItem(index, id) {
+    selectedSenderItems.splice(index, 1);
+    const opt = document.getElementById('inv-opt-sender-' + id);
+    if (opt) opt.classList.remove('selected');
+    renderSenderGrid();
+}
+
+function removeReceiverItem(index, id) {
+    selectedReceiverItems.splice(index, 1);
+    const opt = document.getElementById('inv-opt-receiver-' + id);
+    if (opt) opt.classList.remove('selected');
+    renderReceiverGrid();
+}
+
 function openBuyModal(listingId, itemName, itemPrice) {
     currentListingId = listingId;
     document.getElementById('buyItemName').textContent = itemName;

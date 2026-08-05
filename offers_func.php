@@ -70,34 +70,56 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     
                     $s_ids = array_filter(array_map('intval', explode(',', $offer['sender_item_id'])));
                     if (!empty($s_ids)) {
+                        // Move sender items to receiver; also remove from market if listed
+                        $move_stmt = mysqli_prepare($link, "UPDATE user_items SET user_id = ? WHERE item_id = ? AND user_id = ? LIMIT 1");
+                        $del_market = mysqli_prepare($link, "DELETE FROM market_listings WHERE user_id = ? AND item_id = ? LIMIT 1");
                         foreach ($s_ids as $s_item_id) {
-                            mysqli_query($link, "UPDATE user_items SET user_id = {$offer['receiver_id']} WHERE item_id = $s_item_id AND user_id = {$offer['sender_id']} LIMIT 1");
+                            // Remove any market listing for this sender item first
+                            mysqli_stmt_bind_param($del_market, "ii", $offer['sender_id'], $s_item_id);
+                            mysqli_stmt_execute($del_market);
+                            
+                            mysqli_stmt_bind_param($move_stmt, "iii", $offer['receiver_id'], $s_item_id, $offer['sender_id']);
+                            mysqli_stmt_execute($move_stmt);
                         }
+                        mysqli_stmt_close($move_stmt);
+                        mysqli_stmt_close($del_market);
                     }
                     
                     $r_ids = array_filter(array_map('intval', explode(',', $offer['receiver_item_id'])));
                     if (!empty($r_ids)) {
+                        $del_listing = mysqli_prepare($link, "DELETE FROM market_listings WHERE user_id = ? AND item_id = ? LIMIT 1");
+                        $ins_item = mysqli_prepare($link, "INSERT INTO user_items (user_id, item_id) VALUES (?, ?)");
                         foreach ($r_ids as $r_item_id) {
-                            mysqli_query($link, "DELETE FROM market_listings WHERE user_id = {$offer['receiver_id']} AND item_id = $r_item_id LIMIT 1");
-                            mysqli_query($link, "INSERT INTO user_items (user_id, item_id) VALUES ({$offer['sender_id']}, $r_item_id)");
+                            mysqli_stmt_bind_param($del_listing, "ii", $offer['receiver_id'], $r_item_id);
+                            mysqli_stmt_execute($del_listing);
+                            
+                            mysqli_stmt_bind_param($ins_item, "ii", $offer['sender_id'], $r_item_id);
+                            mysqli_stmt_execute($ins_item);
                         }
+                        mysqli_stmt_close($del_listing);
+                        mysqli_stmt_close($ins_item);
                     }
                     
+                    // Cancel other pending offers that involve any of these items
                     $all_items = array_merge($s_ids, $r_ids);
                     if (!empty($all_items)) {
-                        $cancel_sql = "UPDATE trade_offers SET status = 'cancelled' WHERE status = 'pending' AND id != $offer_id AND (";
                         $conditions = [];
                         foreach ($all_items as $itemId) {
-                            $conditions[] = "FIND_IN_SET('$itemId', sender_item_id) > 0";
-                            $conditions[] = "FIND_IN_SET('$itemId', receiver_item_id) > 0";
+                            $escaped = (int)$itemId;
+                            $conditions[] = "FIND_IN_SET('$escaped', sender_item_id) > 0";
+                            $conditions[] = "FIND_IN_SET('$escaped', receiver_item_id) > 0";
                         }
-                        $cancel_sql .= implode(" OR ", $conditions) . ")";
-                        mysqli_query($link, $cancel_sql);
+                        $cancel_sql = "UPDATE trade_offers SET status = 'cancelled' WHERE status = 'pending' AND id != ? AND (" . implode(" OR ", $conditions) . ")";
+                        $cancel_stmt = mysqli_prepare($link, $cancel_sql);
+                        mysqli_stmt_bind_param($cancel_stmt, "i", $offer_id);
+                        mysqli_stmt_execute($cancel_stmt);
+                        mysqli_stmt_close($cancel_stmt);
                     }
                     
                     $add_history = mysqli_prepare($link, "INSERT INTO trade_history (user1_id, user2_id, user1_items, user2_items) VALUES (?, ?, ?, ?)");
                     mysqli_stmt_bind_param($add_history, "iiss", $offer['sender_id'], $offer['receiver_id'], $offer['sender_item_id'], $offer['receiver_item_id']);
                     mysqli_stmt_execute($add_history);
+                    mysqli_stmt_close($add_history);
 
                     mysqli_commit($link);
                 } catch (Exception $e) {
@@ -144,9 +166,15 @@ function get_items_by_ids($link, $ids_string) {
     $ids = array_filter(array_map('intval', explode(',', $ids_string)));
     if (empty($ids)) return [];
     
-    $in_clause = implode(',', $ids);
-    $res = mysqli_query($link, "SELECT id, name, image, wear_rating, rarity, float_value, game FROM items WHERE id IN ($in_clause)");
-    return mysqli_fetch_all($res, MYSQLI_ASSOC);
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $types = str_repeat('i', count($ids));
+    $stmt = mysqli_prepare($link, "SELECT id, name, image, wear_rating, rarity, float_value, game FROM items WHERE id IN ($placeholders)");
+    mysqli_stmt_bind_param($stmt, $types, ...$ids);
+    mysqli_stmt_execute($stmt);
+    $res = mysqli_stmt_get_result($stmt);
+    $items = mysqli_fetch_all($res, MYSQLI_ASSOC);
+    mysqli_stmt_close($stmt);
+    return $items;
 }
 
 function offers_game_info(string $game): array {
