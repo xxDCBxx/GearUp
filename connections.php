@@ -54,8 +54,9 @@ function send_smtp_email($to, $subject, $message, $fromEmail = EMAIL_SMTP_FROM, 
         return ['success' => false, 'error' => 'SMTP email is not configured. Please set EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_SMTP_USER, EMAIL_SMTP_PASS, and EMAIL_SMTP_FROM in connections.php.'];
     }
 
-    $remote = ($secure === 'ssl' ? 'ssl://' : '') . $host;
-    $fp = fsockopen($remote, $port, $errno, $errstr, 30);
+    $remote = ($secure === 'ssl' ? 'ssl://' : 'tcp://') . $host . ':' . $port;
+    $context = stream_context_create();
+    $fp = stream_socket_client($remote, $errno, $errstr, 30, STREAM_CLIENT_CONNECT, $context);
     if (!$fp) {
         return ['success' => false, 'error' => "SMTP connection failed: $errno $errstr"];
     }
